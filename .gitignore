@@ -1,6 +1,10 @@
 # Temporary builds and rendered previews
 /tmp/
 
+# Local manuscript and bibliography snapshots
+*.before-*.tex
+*.before-*.bib
+
 # LaTeX build artifacts
 *.aux
 *.bbl

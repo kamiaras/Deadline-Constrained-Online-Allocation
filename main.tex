@@ -26,7 +26,7 @@
 \setlength{\emergencystretch}{3em}
 
 \title{Deadline-Constrained Online Allocation}
-\author{Kamiar Asgari}
+\author{Kamiar Asgari\thanks{This work was carried out jointly with GPT-6.}}
 \date{}
 
 \begin{document}
@@ -37,13 +37,13 @@ We study online allocation in a lossless scalar storage system with
 adversarial arrivals in $[0,1]$ and a hard service deadline. Each arrival
 must be consumed fully within the next $H$ actions. The controller chooses
 its action before observing the current arrival and a jointly convex cost
-of storage and consumption. Over a horizon of $T$ rounds, we measure regret
+of storage and consumption. Over a horizon of $T\ge H$ rounds, we measure regret
 against the best fixed allocation of every arrival across the $H$
 admissible service ages. Our controller organizes service ages in a balanced
 binary tree and chooses each allocation split only when its interval
 begins. This progressive allocation guarantees deadline feasibility and
-regret $O(L_u\sqrt{H_0T}+L_xH_0^{3/2}\sqrt T)$, where
-$H_0=\min\{H,T\}$ and $L_x,L_u$ bound the state and action components of
+regret $O(L_u\sqrt{HT}+L_xH^{3/2}\sqrt T)$, where
+$L_x,L_u$ bound the state and action components of
 joint subgradients. We also derive a prediction-error guarantee for causal
 forecasts and show how uniformly positive storage marginal costs can
 justify a shorter deadline, with an explicit correction for the finite
@@ -104,7 +104,16 @@ between the two child intervals.
 
 \subsection{Contributions and organization}
 
-Let $T$ be the cost horizon, $H_0=\min\{H,T\}$, and $L_x,L_u$ be bounds on
+The analysis combines established scheduling-filter and sequential-learning
+ideas with a causal service-age construction. In particular, the fixed
+filter class has precedents in deadline scheduling
+\cite{khojastepour2004delay}, and the local-to-global regret identity
+specializes laminar regret decomposition \cite{farina2019laminar}.
+Our claims concern the resulting guarantees for the storage model and
+benchmark specified below; Section~\ref{ch6:sec:related} details the
+closest overlaps and distinctions.
+
+Let $T$ be the cost horizon, assume $1\le H\le T$, and let $L_x,L_u$ bound
 the state and action components of joint subgradients. Our main results
 are as follows.
 \begin{enumerate}[leftmargin=*]
@@ -113,17 +122,17 @@ The controller serves every arrival by its deadline and competes with the
 full class of fixed age-allocation policies. For jointly convex
 state--action costs, Theorem~\ref{ch6:thm:general} gives the regret bound
 \[
- O\!\left(L_u\sqrt{H_0T}+L_xH_0^{3/2}\sqrt T\right).
+ O\!\left(L_u\sqrt{HT}+L_xH^{3/2}\sqrt T\right).
 \]
 For fixed $H,L_x,L_u$, this yields $O(\sqrt T)$ regret.
 \item \textbf{Shorter deadlines under positive storage costs.}
 If the storage marginal cost has a known positive lower bound, accumulated
 holding costs can outweigh the benefit of delaying consumption. We give an
-explicit service deadline $K\le H_0$ that can shorten the allocation
+explicit service deadline $K\le H$ that can shorten the allocation
 horizon while retaining the original benchmark.
 Theorem~\ref{ch6:thm:positive} bounds the resulting regret and accounts for
 arrivals near the end of the cost horizon through an additional comparison
-term of at most $L_uK$ when $K<H_0$.
+term of at most $L_uK$ when $K<H$.
 \item \textbf{Prediction and correction.}
 Causal forecasts guide the current allocation split, and the observed
 costs subsequently update the learner. Theorem~\ref{ch6:thm:master} bounds
@@ -132,11 +141,11 @@ earlier and later service. Section~\ref{ch6:sec:prediction} constructs such
 predictors from cost forecasts and known state-cost components.
 \item \textbf{Lower bounds and the remaining gap.}
 For $H\ge3$ and $T\ge4$, Theorem~\ref{ch6:thm:lower-state} proves an
-$\Omega(L_xH_0^{3/2}\sqrt T)$ lower bound using linear storage costs whose
+$\Omega(L_xH^{3/2}\sqrt T)$ lower bound using linear storage costs whose
 marginals may have either sign. Thus the storage-dependent term is
 unavoidable in the worst case. For consumption-only costs with $H,T\ge2$,
 Theorem~\ref{ch6:thm:lower-action} gives an $\Omega(L_u\sqrt T)$ lower bound,
-leaving a gap of $\sqrt{H_0}$ from the upper bound. The optimal deadline
+leaving a gap of $\sqrt{H}$ from the upper bound. The optimal deadline
 dependence in this case remains open.
 \end{enumerate}
 
@@ -153,91 +162,378 @@ and~\ref{ch6:sec:conclusion} discuss future directions and conclude.
 \section{Related Work}
 \label{ch6:sec:related}
 
-\subsection{Online optimization with memory and dynamical systems}
+The relevant literature spans deadline scheduling, online control,
+optimization with memory, and regret minimization on trees. Several
+ingredients used here have established precedents: finite scheduling
+filters, simplex policy parameters, local regret decompositions, delayed
+updates, and optimistic mirror descent. The results of this paper concern
+their use in a specific combination: lossless storage with adversarial
+arrivals, complete service of every arrival within a common deadline,
+jointly convex costs revealed after the action, and regret against the
+entire class of fixed age distributions evaluated on their own
+trajectories. We distinguish that combination from its individual
+ingredients below.
 
-Anava, Hazan, and Mannor~\cite{anava2015memory} study online convex
-optimization when a loss depends on several recent decisions. Their
-framework makes explicit a difficulty that also arises here: changing a
-decision can affect costs beyond the round in which it is selected.
-Kumar, Dean, and Kleinberg~\cite{kumar2023unbounded} study how past decisions
-affect losses with unbounded memory. In this paper, an arrival
-contributes to the stored state until its service is complete, so choosing
-its consumption age changes several future costs.
-
-A related connection is nonstochastic control. Agarwal
-et al.~\cite{agarwal2019online} consider linear dynamics with adversarial
-disturbances and general convex state--action costs, using regret against
-a class of strongly stable linear controllers. This paper shares the
-adversarial viewpoint and evaluates each comparator on its own trajectory.
-Its comparator is instead a fixed distribution over consumption ages.
-Moreover, feasibility includes complete service of every arrival by its
-deadline. The age representation enforces this obligation directly and
-makes the influence of each arrival end after finitely many actions.
-
-\subsection{Delayed feedback and optimistic learning}
-
-Joulani, Gy\"orgy, and Szepesv\'ari~\cite{joulani2013delayed} give general
-reductions from learning with delayed feedback to learning without delays.
-To handle delayed feedback, the controller cycles among separate copies of
-the learning algorithm, reusing a copy only after feedback from its previous
-decision is available. Here, however, the delay is generated by the controller's
-interval decomposition. The round cost is observed immediately after the
-action, while the full marginal comparison between two age intervals
-requires observations from later rounds.
-
-Rakhlin and Sridharan~\cite{RakhlinSridharan2013} develop online learning
-methods that exploit predictable sequences while retaining worst-case
-guarantees. The prediction--correction controller follows the same
-principle: a causal prediction influences the current split, and the
-realized feedback subsequently corrects the reference point. Its guarantee
-depends on prediction errors in local marginal comparisons.
-
-\subsection{Delay-constrained scheduling and deferrable service}
+\subsection{Deadline-feasible scheduling filters}
 \label{ch6:subsec:related-scheduling}
 
-Hard deadlines have long been central to energy-efficient scheduling.
-Yao, Demers, and Shenker~\cite{yao1995scheduling} study jobs with release
-times and deadlines on a variable-speed processor, with convex power
-consumption. Their work includes optimal offline scheduling and competitive
-analysis of online policies.
+Khojastepour and Sabharwal~\cite{khojastepour2004delay} provide a particularly
+close antecedent. They study power-efficient communication subject to a
+maximum delay for each packet and represent feasible schedulers using
+finite, potentially time-varying linear filters. Their time-invariant
+class has nonnegative coefficients summing to one. With the appropriate
+shift for when arrivals become available, this is precisely the fixed
+age-allocation class in Section~\ref{ch6:subsec:fixed-policies}. Under
+i.i.d.\ arrivals and their long-run Gaussian-channel power criterion,
+their optimal time-invariant scheduler is the uniform moving-average
+filter, independently of the arrival distribution. Thus
+neither normalized scheduling filters nor their deadline-feasibility
+interpretation originates in the present paper.
 
-The closest scheduling connection is Khojastepour and Sabharwal's
-\emph{Delay-Constrained Scheduling: Power Efficiency, Filter Design, and
-Bounds}~\cite{khojastepour2004delay}. They minimize average transmit power
-over Gaussian channels subject to a maximum delay for every packet. Their
-robust schedulers do not require knowledge of source-arrival statistics,
-and their analysis connects feasible schedules to time-varying linear
-filters. Under i.i.d.\ arrivals, their optimal time-invariant scheduler
-is a moving-average filter of length equal to the delay bound,
-independently of the arrival distribution. This gives
-a concrete link to the uniform age-allocation policy within the present comparator
-class.
+Xu et al.~\cite{xu2010filter} develop a related finite-filter viewpoint for
+server scheduling, studying workload smoothing and response-time
+constraints through frequency-domain analysis. These applications show
+that the filter interpretation extends beyond communication buffers.
+Our benchmark is the best fixed filter on the realized sequence, whereas
+the controller constructs a time-varying service allocation. Its learning
+guarantee concerns arbitrary revealed-after-action convex costs, including
+costs of the queue itself. The specific additional mechanism is to choose
+each interval split when that interval begins, so that later choices for
+the same arrival can use intervening observations. The older filter
+representation alone does not supply the regret analysis for these
+progressively chosen splits.
 
-These connections motivate interpreting arrivals as divisible work and
-consumption as service. A fixed age distribution is a nonnegative,
-normalized finite filter applied to past arrivals, while the controller
-developed here adapts the service distribution before each remaining interval
-begins. The objective here is regret against all fixed age distributions
-under costs revealed after service decisions. This differs from an offline
-minimum-energy objective or a competitive ratio against an unrestricted
-offline schedule. Section~\ref{ch6:sec:applications} states the common
-physical scope, and Section~\ref{ch6:subsec:delay-scheduling} develops the
-communication-buffer interpretation and an explicit convex energy-cost
-specialization.
+\subsection{Energy-efficient processor and packet scheduling}
 
-\subsection{Storage management and energy harvesting}
+Yao, Demers, and Shenker~\cite{yao1995scheduling} established the classical
+speed-scaling model: jobs have release times, workloads, and deadlines,
+and processor power is a convex function of speed. Bansal, Kimbrel, and
+Pruhs~\cite{bansal2007speed} develop competitive algorithms and bounds for
+energy and temperature management. The consumption-only specialization
+of our model has the same basic incentive to spread divisible service
+over time, and a common relative deadline is a special case of job
+deadlines. These works compare energy with an unrestricted offline
+schedule under a prescribed power function. Our comparator is restricted
+to fixed age distributions, while the cost function may change
+adversarially and is observed only after service. Consequently, the
+competitive ratios and the additive regret bounds answer different
+questions. Their competitive guarantees do not directly establish
+additive regret to the fixed-filter benchmark under our information pattern.
+
+For wireless transmission, Uysal-Biyikoglu, Prabhakar, and
+El Gamal~\cite{uysal2002energy} analyze energy-efficient packet scheduling
+and lazy transmission policies. Fu, Modiano, and
+Tsitsiklis~\cite{fu2006transmission} study energy and deadline constraints
+over fading channels, including a model in which current channel
+information is unavailable until after transmission. Lee and
+Jindal~\cite{lee2009energy} study the complete transmission of a fixed
+amount of data within a finite number of slots under causal channel
+information. The finite-horizon stochastic formulations of Fu et al.\
+and Lee and Jindal establish important precedents for allocating service
+across a deadline window. Our formulation has overlapping arrival cohorts
+and adversarial revealed costs, with complete service imposed
+deterministically. Post-action revelation by itself is therefore not
+the distinction from all earlier packet-scheduling work.
+
+\subsection{Learning and prediction under service deadlines}
+
+Learning-based delay-constrained scheduling also predates this work.
+Salodkar et al.~\cite{salodkar2008learning} learn energy-efficient policies
+over fading channels without knowing the arrival and channel
+distributions, using stochastic approximation with an average-delay
+constraint. An average-delay guarantee does not imply the individual
+completion requirement used here. Cayci and
+Eryilmaz~\cite{cayci2019coding} analyze learning for dynamic coding with
+deadline-constrained traffic and unknown channel statistics. Their regret
+concerns the revenue of channel-allocation policies, including the
+possibility of untransmitted packets, rather than obligatory complete
+service of each arrival.
+
+More directly, Mlika, Driouch, and Ajib~\cite{mlika2019deadline} combine
+competitive and learning algorithms for deadline scheduling in
+energy-harvesting networks. Their bandit learner selects among a finite
+set of frame-level energy-allocation rules to increase the number of users
+served on time. This is a precedent for regret guarantees in deadline
+scheduling, but users may be dropped and the benchmark is a finite
+collection of rules. Liu and Fang~\cite{liu2023scheduling} learn which task
+types to activate when completion times and rewards are unknown; their
+deadline mechanism interrupts tasks, together with a throughput
+constraint. Neither interpretation of a deadline is equivalent to
+conservation of every divisible arrival across its allowed service ages.
+
+Predictions have also been studied in models with full service and common
+relative deadlines. Bamas et al.~\cite{bamas2020learning} give
+learning-augmented speed-scaling algorithms, including a model in which
+each workload must be processed within a common delay. Their guarantees
+interpolate between accurate workload predictions and worst-case
+competitive performance. Antoniadis, Jabbarzade, and
+Shahkarami~\cite{antoniadis2022prediction} develop a different prediction
+setup for online speed scaling. These works optimize a known energy law
+and assess error in predicted jobs or workloads. Here, forecasts predict
+local comparisons of marginal service and storage costs, and the bound
+is additive regret against fixed age filters. Shortening a virtual
+deadline to create scheduling slack, as in learning-augmented speed
+scaling, is also distinct from our comparison argument that bounds the
+cost of shortening the comparator's support using positive holding
+marginals.
+
+Kong et al.~\cite{kong2025deadline} study deadline-aware fine-tuning on
+spot and on-demand computing instances, with forecasts of market
+conditions and regret for selecting among scheduling policies. The
+finite policy-selection benchmark and computing-allocation model differ
+from our continuum of age distributions. In another recent preprint,
+Zhang and Mo~\cite{zhang2026hard} combine per-slot safety for a fluid
+peak-age-of-information state with static regret under a viability
+assumption. Their modeled age safety requires additional assumptions to
+imply packet-level guarantees. It does not express the same obligation
+as completing every arrival in the present storage system. The
+distinction lies in the service obligations, information pattern, and
+comparator, rather than in the general combination of deadlines and
+no-regret learning.
+
+\subsection{Deferrable loads, queueing, and energy storage}
+
+Neely, Saber Tehrani, and Dimakis~\cite{neely2010renewable} allocate
+renewable energy to delay-tolerant consumers using Lyapunov optimization
+and a virtual queue that yields a worst-case delay bound. Their model
+allows purchases from an outside supply and relates average performance
+to the resulting delay bound, with extensions to arbitrary sample paths.
+Thus queue-based control can guarantee maximum delay, not only average
+backlog. Here the deadline is an exogenous requirement, arrivals are the
+resource to be served, and the performance comparison is finite-horizon
+regret to a fixed scheduling filter.
+
+Gan et al.~\cite{gan2013deferrable} use model predictive control for
+deferrable loads with arrival uncertainty and updated renewable-generation
+forecasts. Their model allows heterogeneous deadlines and charging-rate
+limits and studies aggregate-load variability. Lechowicz
+et al.~\cite{lechowicz2026smoothed} study online smoothed demand management
+with energy storage, flexible demand deadlines, and penalties for changing
+purchase and delivery rates. They obtain competitive guarantees and
+study learning from historical instances. These models have physical
+features absent here, including additional capacity or smoothness
+constraints. Our common-deadline, divisible-service model isolates a
+different question: learning with arbitrary jointly convex state--action
+costs while retaining exact per-arrival conservation.
 
 Asgari and Neely~\cite{10.1145/3428337} combine Bregman-based online
-optimization with energy-harvesting constraints, assuming independent,
-identically distributed energy arrivals with an unknown distribution.
-Their work connects learning guarantees to available battery resources.
-The present setting requires consumption not to exceed stored resource but allows
-adversarial arrivals and imposes an explicit maximum residence time.
+optimization with energy-harvesting constraints and unknown i.i.d.\
+energy arrivals. Their guarantees connect regret to battery capacity.
+Chau, Zhang, and Chen~\cite{chau2016cost} study energy-storage management
+through worst-case competitive guarantees against a fully informed
+offline policy. Neither battery availability alone nor a bound on its
+capacity enforces a maximum residence time for each arriving unit.
+Conversely, compulsory consumption is not an innocuous assumption for
+all energy-storage applications: the application must have a reason to
+serve every arrival by its deadline.
 
-Chau, Zhang, and Chen~\cite{chau2016cost} analyze online energy-storage
-management through competitive guarantees relative to a fully informed
-offline policy. That perspective addresses a different performance
-question from the fixed-policy regret considered here.
+\subsection{Simplex disturbance-action policies and nonstochastic control}
+\label{ch6:subsec:related-control}
+
+Agarwal et al.~\cite{agarwal2019online} develop online control with
+adversarial disturbances and convex state--action costs using
+disturbance-action policies, with regret against strongly stable linear
+controllers. Golowich et al.~\cite{golowich2024population} use
+simplex-structured policies for online population control. These works
+establish both the disturbance-filter approach and the use of simplex
+geometry in online control. In our problem the filter coordinates index
+service ages and must conserve each arrival, rather than population
+proportions or unconstrained disturbance responses.
+
+The recent work of Asgari and Neely~\cite{asgari2026simplex} is especially
+close: it treats scalar storage, adversarial nonnegative arrivals,
+revealed-after-action joint costs, and fixed simplex disturbance-action
+comparators. Its main dynamics have retention $\alpha\in(0,1)$; filter
+coefficients form a subprobability simplex, and clipping ensures online
+resource availability. Our fixed policies agree algebraically with the
+unit-sum, $\alpha=1$ boundary of that filter family. However, its main
+regret theorem relies on contraction and does not specialize to
+$\alpha=1$. Its discussion of noncontracting storage instead adds a
+stabilizing consumption baseline. Such a baseline excludes, for example,
+for $H>1$, the pure age-$H$ policy before its service time. It also does not enforce
+complete consumption of every arrival at a finite age. The present
+deadline guarantee and comparison with all of $\Delta_H$ therefore
+require a separate argument; the simplex representation and general
+adversarial storage-learning formulation are shared antecedents.
+
+\subsection{Exact constraints versus cumulative violation}
+
+Online convex optimization with long-term constraints, exemplified by
+Mahdavi, Jin, and Yang~\cite{mahdavi2012constraints}, trades regret against
+cumulative constraint violation. Liu, Yang, and
+Ying~\cite{liu2023constraints} study nonstochastic control with adversarial
+and static constraints through constrained optimization with memory.
+Bounds on cumulative violation cannot by themselves certify every
+individual service deadline.
+
+There are also online-control algorithms that maintain exact safety.
+Li, Das, and Li~\cite{li2021affine} use tightened policy sets to satisfy
+affine state and action constraints, under assumptions including a
+strictly safe controller. Zhou and Tzoumas~\cite{zhou2023safe} study
+nonstochastic control under time-varying convex safety constraints.
+Thus exact feasibility with regret is already an established goal and
+result in constrained control. Our distinction is the particular
+conservation construction and comparator: every split preserves assigned
+resource, leaf service exhausts it by the deadline, and all age
+distributions remain admissible. The construction works from an empty
+store and allows operation on the boundary, without a strict feasibility
+margin. Merely expressing availability as an affine constraint does not
+establish the required age-by-age completion property.
+
+\subsection{Optimization with memory and the meaning of regret}
+\label{ch6:subsec:related-memory}
+
+Anava, Hazan, and Mannor~\cite{anava2015memory} study convex losses that
+depend on several past decisions. Kumar, Dean, and
+Kleinberg~\cite{kumar2023unbounded} extend this viewpoint to unbounded
+memory and characterize regret through the influence of past decisions.
+Their finite-memory specialization is also relevant to the deadline
+dependence: Appendix D, Theorem D.1 gives a lower bound of order
+$L h^{3/2}\sqrt T$ for a general memory-$h$ loss class with an
+$\ell_1$ history norm. Accordingly, the exponent $3/2$ is not new as a
+general memory phenomenon. The lower bound in
+Theorem~\ref{ch6:thm:lower-state} realizes this order within a more
+restricted class: scalar storage, linear signed state costs, exact
+deadlines, and fixed age-policy comparators. A generic memory lower bound
+does not automatically apply to every physically constrained subclass.
+
+Memory methods also clarify why convexity of the fixed-policy objective
+is insufficient for an immediate online algorithm. Updating a filter
+parameter every round need not conserve the resource assigned by earlier
+parameters; actual service and state are determined by past commitments.
+The per-arrival representation explicitly records those commitments.
+Zhao et al.~\cite{zhao2023nonstationary} study changing comparators through
+dynamic policy regret in optimization with memory and nonstochastic
+control. Our age-distribution comparator stays fixed; adversarially
+changing costs and progressively changing online decisions do not turn
+the guarantee into dynamic regret.
+
+There is a further distinction when the environment reacts to actions.
+Arora, Dekel, and Tewari~\cite{arora2012policy} distinguish ordinary regret
+on the realized loss sequence from policy regret that reevaluates an
+adaptive adversary along alternative histories. Here, the realized
+arrival and cost sequence is held fixed for all comparisons, while each
+fixed age policy generates its own state. Thus our guarantee addresses
+the physical trajectory dependence for a fixed realized environment;
+it does not compare different reactions of an adaptive environment to
+counterfactual policies.
+
+\subsection{Tree decompositions and local regret minimization}
+\label{ch6:subsec:related-tree}
+
+Zinkevich et al.~\cite{zinkevich2007counterfactual} introduced counterfactual regret
+minimization for extensive-form games. Farina, Kroer, and
+Sandholm~\cite{farina2019laminar} develop laminar regret decomposition
+for sequential decision processes and convex losses. The principle is
+to combine local learners at decision nodes, evaluating each alternative
+with the learner's continuation decisions. Our binary tree identity is
+a specialization of this local-to-global viewpoint: the comparator's
+mass $M_I$ weights the local difference, and the node feedback compares
+the two child continuation values. Computing hypothetical feedback even
+at unused nodes is consistent with that interpretation. The identity
+and the general idea of decomposing regret on a tree are not separate
+novelty claims here.
+
+Tree-based geometry and prediction have likewise been studied together.
+Hoda et al.~\cite{hoda2010smoothing} construct smoothing geometries for
+sequential-game strategy spaces. Farina et al.~\cite{farina2019stable}
+combine predictive local learners with counterfactual regret
+minimization, while Farina, Kroer, and
+Sandholm~\cite{farina2019dilated,farina2025regularization} study optimistic
+updates and improved regularization on sequential decision spaces.
+Fan, Kroer, and Farina~\cite{fan2024optimality} analyze dilated entropy
+and regret lower bounds for extensive-form games. These results provide context for
+the local quadratic and entropy choices, but the associated strategy-space
+or equilibrium guarantees do not directly give a physical service-age
+bound. In particular, node-dependent feedback copies mean that our
+implementation should not be identified without further argument with
+one synchronous global mirror-descent step.
+
+The additional structure is temporal. Nodes correspond to consecutive
+service ages, their decisions begin at different physical times, and
+feedback is complete only after their intervals end. The same interval
+length $d_I$ controls both feedback delay and the storage-cost difference
+between descendant ages. Balancing the tree makes the sums of
+$\sqrt{d_I}$ and $d_I^{3/2}$ along a path scale respectively as
+$\sqrt K$ and $K^{3/2}$ for a tree on $K$ ages. This is the source of the separate action and
+storage contributions, rather than a generic dependence on the number
+of tree nodes. The proof also has to link these local losses to the
+actual jointly convex storage cost and to physically feasible service.
+
+\subsection{Delayed feedback, optimism, and predictions}
+
+Mirror descent and its Bregman geometry are classical
+\cite{BECK2003167}. Joulani, Gy\"orgy, and
+Szepesv\'ari~\cite{joulani2013delayed} provide general reductions for
+learning with delayed feedback. The separate learner copies used here
+are a bounded-delay device: a copy is reused only after its preceding
+comparison has become available. The physical round cost is observed
+immediately after service, but the complete comparison of two service
+intervals depends on later rounds. It is this derived feedback, rather
+than the original cost observation, that is delayed.
+Quanrud and Khashabi~\cite{quanrud2015delays} and Joulani,
+Gy\"orgy, and Szepesv\'ari~\cite{joulani2016delay} analyze other
+delay-tolerant gradient and mirror-descent methods. Separate copies are
+therefore a convenient implementation here, rather than a necessary
+feature of all delayed-learning algorithms.
+
+Rakhlin and Sridharan~\cite{RakhlinSridharan2013} develop learning with
+predictable sequences. Flaspohler et al.~\cite{flaspohler2021optimism}
+study optimism and delay together, showing how predictions can offset
+missing feedback. These are direct methodological antecedents of our
+prediction--correction bound. More recently, Abdullah
+et al.~\cite{abdullah2026memory} combine constraints, memory, and
+predictions through a delayed optimistic formulation, with regret and
+cumulative-violation guarantees. The present contribution in this
+direction is the choice of local marginal-cost prediction targets and
+their aggregation under exact deadline feasibility. Predictions are
+causal and may be inaccurate; the bound measures their realized local
+errors rather than assuming access to future costs.
+Cheng et al.~\cite{cheng2019predictor} also provide a predictor--corrector
+approach to policy optimization with error-dependent regret. The
+prediction--correction principle is shared; the service obligations and
+local continuation comparisons are specific to the present construction.
+
+\subsection{Inventory learning and budgeted online allocation}
+
+Inventory learning provides another connection between optimization and
+state-dependent implementability. Zhang, Chao, and
+Shi~\cite{zhang2018perishable} study learning a base-stock policy for
+perishable inventory under censored demand, with holding, lost-sales,
+and outdating costs. Hihat et al.~\cite{hihat2023inventory} extend
+inventory learning beyond i.i.d.\ demand under non-degeneracy conditions.
+Pineci and Xu~\cite{pineci2026inventory} develop a hidden-target approach
+for feasible inventory learning on general convex sets. In these
+problems the controller replenishes stock to meet demand, and unsold
+items may persist or perish. Here arrivals are exogenous and the
+controller must consume all of them on time. A product's shelf life
+therefore should not be identified with our mandatory service deadline.
+
+Budgeted online allocation is also related in its use of mirror
+descent, but the resource obligation is different. Balseiro, Lu, and
+Mirrokni~\cite{balseiro2023allocation} study dual mirror descent for
+reward-maximizing allocation under total resource budgets, with
+guarantees across stochastic and adversarial input models. A total
+budget limits aggregate resource expenditure; it does not require each
+incoming unit to be allocated completely within a residence-time bound.
+The shared term ``online allocation'' therefore covers different
+feasibility structures and benchmarks.
+
+\subsection{Scope of the contribution}
+
+The contribution supported by these comparisons is a deadline-feasible
+instantiation and analysis of progressive allocation for adversarial
+joint costs, with the explicit bound
+$O(L_u\sqrt{HT}+L_xH^{3/2}\sqrt T)$ against all fixed age filters.
+The accompanying results identify a matching signed-storage lower bound
+inside this model, construct local cost predictors, and bound the
+finite-horizon cost of reducing the comparator's deadline under positive
+holding marginals. We make no separate priority claim for scheduling
+filters, simplex control, hierarchical regret decomposition, delayed
+mirror descent, or the general coexistence of deadlines and learning.
+The matching lower bound applies to signed state marginals; it does not
+settle the optimal deadline dependence for consumption-only costs or for
+the class with nonnegative state marginals.
 
 \section{Model, Information, and Benchmark}
 \label{ch6:sec:model}
@@ -250,7 +546,8 @@ and $0\log0=0$ in entropy expressions. For scalar clipping, write
 $[v]_\ell^r=\min\{r,\max\{\ell,v\}\}$.
 
 \subsection{Lossless dynamics and joint costs}
-Let $T\ge1$ be the cost horizon and $H\ge1$ the consumption deadline.
+Let $T$ be the cost horizon and $H$ the consumption deadline, with integers
+$1\le H\le T$ throughout.
 Write $x_t,u_t,w_t$ for the stored resource, consumption, and arrival in
 round $t$. The system starts empty and evolves as
 \begin{equation}\label{ch6:eq:dynamics}
@@ -405,18 +702,12 @@ part of the objective, include those rounds in $T$ for both policies.
 
 For nontrivial learning let
 \begin{equation}\label{ch6:eq:horizons}
- N=T-1,\qquad H_0=\min\{H,T\}.
+ N=T-1.
 \end{equation}
 For each integer $1\le K\le H$, we identify a policy in $\Delta_K$ with its zero-padded
-vector in $\Delta_H$ when evaluating its trajectory and $J_T$; the same
-convention applies to $\Delta_{H_0}$.
+vector in $\Delta_H$ when evaluating its trajectory and $J_T$.
 The arrival $w_T$ cannot affect any cost through $T$ and may be served at
-$T+1$. Only arrivals $s=1,\ldots,N$ can affect costs included in the objective. If $H>T$, move every
-comparator weight at an age greater than $T$ to age $T$. Arrival indices
-begin at $s=1$, so even service at age $T$ occurs at time $s+T>T$. Both the
-original and the moved service therefore occur after the cost horizon.
-The move leaves the stored and consumed amounts unchanged through round $T$,
-so $\Delta_{H_0}$ represents the original benchmark exactly on that horizon.
+$T+1$. Only arrivals $s=1,\ldots,N$ can affect costs included in the objective.
 Every state within this horizon is also bounded by $\min\{H,t-1\}$.
 
 For $T=1$ or $H=1$ regret is zero. The formulas below are stated for
@@ -497,8 +788,8 @@ Section~\ref{ch6:subsec:fixed-policies}.
 
 \section{Causal Allocation and Delayed Mirror Descent}
 \label{ch6:sec:algorithm}
-Choose a deadline $1\le K\le H_0$ for the controller. The general controller uses
-$K=H_0$; Section~\ref{ch6:sec:positive} gives a justified reduction when
+Choose a deadline $1\le K\le H$ for the controller. The general controller uses
+$K=H$; Section~\ref{ch6:sec:positive} gives a justified reduction when
 state marginals have a uniform positive lower bound.
 
 \subsection{Age intervals and causal routing}
@@ -697,7 +988,7 @@ Lemma~\ref{app:lem:optimistic}.
 \caption{Deadline allocation with joint costs}
 \label{ch6:alg:controller}
 \begin{algorithmic}[1]
-\Require $T$, $K\le H_0$, tree $\mathcal{T}_K$, regularizer $\psi$, positive
+\Require $T$, $K\le H$, tree $\mathcal{T}_K$, regularizer $\psi$, positive
  steps $\eta_I$, causal predictor rule $F$
 \State If $K=1$, serve every arrival at age one and stop.
 \State Initialize every node's $d_I$ reference copies to $1/2$;
@@ -727,6 +1018,8 @@ Lemma~\ref{app:lem:optimistic}.
 \label{ch6:sec:analysis}
 
 \subsection{Regularizer constants and a prediction-error bound at one node}
+The local prediction--correction estimate uses standard optimistic
+mirror-descent analysis \cite{RakhlinSridharan2013,flaspohler2021optimism}.
 For the two regularizers define constants by
 \begin{equation}\label{ch6:eq:geometry}
  {D_\psi}(p,z)\ge\frac{\sigma_\psi}{2}(p-z)^2,\qquad
@@ -869,6 +1162,10 @@ no resource there.
 The next identity expresses the linearized cost difference for one
 arrival as a sum of comparisons at individual nodes. Each comparison is
 weighted by the fraction $M_I$ assigned there by the fixed policy.
+This is the binary terminal-cost specialization of the counterfactual
+and laminar regret decomposition viewpoint
+\cite{zinkevich2007counterfactual,farina2019laminar}; we include its
+short proof to make the service-age analysis self-contained.
 
 \begin{Thm:Lemma}[Tree identity]\label{ch6:lem:tree}
 For every arrival $s$,
@@ -981,41 +1278,39 @@ Consequently
 \end{equation}
 
 \begin{Thm:Theorem}[Adversarial jointly convex costs]\label{ch6:thm:general}
-Under \eqref{ch6:eq:support}--\eqref{ch6:eq:bounded-grad}, use $K=H_0$, $F=0$,
+Under \eqref{ch6:eq:support}--\eqref{ch6:eq:bounded-grad}, use $K=H$, $F=0$,
 and \eqref{ch6:eq:steps} with $B_I=G_I$. The controller satisfies
 \begin{align}
  \Reg_T(\Delta_H)
  &\le{C_\psi}\sqrt{T-1}
- \max_{1\le i\le H_0}\sum_{I\ni i}
+ \max_{1\le i\le H}\sum_{I\ni i}
  [2L_u+(d_I-1)L_x]\sqrt{d_I}\label{ch6:eq:general-path}\\
- &\le{C_\psi}[2L_u+(H_0-1)L_x]\sqrt{T-1}\,\Lambda_{H_0}.
+ &\le{C_\psi}[2L_u+(H-1)L_x]\sqrt{T-1}\,\Lambda_{H}.
  \label{ch6:eq:general-common}
 \end{align}
 In particular, for quadratic updates,
 \begin{equation}\label{ch6:eq:main-upper}
  \boxed{\Reg_T(\Delta_H)\le
- \frac{2L_u+(H_0-1)L_x}{2}\sqrt{T-1}\,\Lambda_{H_0}
- =O\bigl(L_u\sqrt{H_0T}+L_xH_0^{3/2}\sqrt T\bigr).}
+ \frac{2L_u+(H-1)L_x}{2}\sqrt{T-1}\,\Lambda_{H}
+ =O\bigl(L_u\sqrt{HT}+L_xH^{3/2}\sqrt T\bigr).}
 \end{equation}
 \end{Thm:Theorem}
 \begin{proof}
-With $K=H_0$ and $N=T-1$, \eqref{ch6:eq:general-node-bound} gives
+With $K=H$ and $N=T-1$, \eqref{ch6:eq:general-node-bound} gives
 \[
 B_I=G_I=2L_u+(d_I-1)L_x
-\le 2L_u+(H_0-1)L_x=:G_*.
+\le 2L_u+(H-1)L_x=:G_*.
 \]
 For every leaf $i$, there is at most one interval containing $i$ at each
-depth $j$, and its length is at most $\lceil H_0/2^j\rceil$.  Therefore
+depth $j$, and its length is at most $\lceil H/2^j\rceil$.  Therefore
 \begin{align*}
-\sum_{\substack{I\in\mathcal I_{H_0}\\i\in I}}
+\sum_{\substack{I\in\mathcal I_{H}\\i\in I}}
 G_I\sqrt{d_I}
-&\le G_*\sum_{j=0}^{\lceil\log_2H_0\rceil-1}
-\sqrt{\lceil H_0/2^j\rceil}\\
-&=G_*\Lambda_{H_0}.
+&\le G_*\sum_{j=0}^{\lceil\log_2H\rceil-1}
+\sqrt{\lceil H/2^j\rceil}\\
+&=G_*\Lambda_{H}.
 \end{align*}
-Theorem~\ref{ch6:thm:master} and the equality
-$\Reg_T(\Delta_H)=\Reg_T(\Delta_{H_0})$ established in
-Section~\ref{ch6:subsec:terminal} give
+Theorem~\ref{ch6:thm:master} gives
 \eqref{ch6:eq:general-path}--\eqref{ch6:eq:general-common}.
 For quadratic updates, $C_\psi=1/2$; \eqref{ch6:eq:S-bound} then gives
 \eqref{ch6:eq:main-upper}.
@@ -1024,8 +1319,8 @@ For quadratic updates, $C_\psi=1/2$; \eqref{ch6:eq:S-bound} then gives
 \begin{Thm:Corollary}[Consumption-only costs]\label{ch6:cor:action}
 If $L_x=0$, the quadratic controller satisfies
 \begin{equation}\label{ch6:eq:action-upper}
- \Reg_T(\Delta_H)\le L_u\sqrt{T-1}\,\Lambda_{H_0}
- \le2(1+\sqrt2)L_u\sqrt{H_0(T-1)}.
+ \Reg_T(\Delta_H)\le L_u\sqrt{T-1}\,\Lambda_{H}
+ \le2(1+\sqrt2)L_u\sqrt{H(T-1)}.
 \end{equation}
 \end{Thm:Corollary}
 \begin{proof}
@@ -1035,8 +1330,8 @@ Set $L_x=0$ in \eqref{ch6:eq:general-common} and use
 \end{proof}
 
 For fixed $H,L_x,L_u$, the regret is $O(\sqrt T)$. With fixed positive
-bounds and a growing deadline, $H_0^3=o(T)$ is sufficient for the general
-upper bound to be sublinear, whereas $H_0=o(T)$ suffices when $L_x=0$.
+bounds and a growing deadline, $H^3=o(T)$ is sufficient for the general
+upper bound to be sublinear, whereas $H=o(T)$ suffices when $L_x=0$.
 
 \section{Deadline Selection under Nonnegative State Marginals}
 \label{ch6:sec:positive}
@@ -1085,25 +1380,25 @@ accounts separately for arrivals whose service extends beyond the cost
 horizon. Choose
 \begin{equation}\label{ch6:eq:K}
  K=\begin{cases}
- H_0,&\lambda=0,\\[1mm]
- \displaystyle\min\left\{H_0,
+ H,&\lambda=0,\\[1mm]
+ \displaystyle\min\left\{H,
  \max\left\{1,\left\lceil\frac{2L_u}{\lambda}\right\rceil\right\}\right\},
  &\lambda>0.
  \end{cases}
 \end{equation}
 This choice also gives $\lambda(K-1)\le2L_u$, so the part of the local
 feedback bound \eqref{ch6:eq:positive-B} proportional to $\lambda$ is at
-most $2L_u$. When $K<H_0$, it satisfies
+most $2L_u$. When $K<H$, it satisfies
 $\lambda K\ge2L_u$ as required for the preceding cost comparison.
 For $K=1$ there are no split decisions to learn.
 
 \begin{Thm:Lemma}[Cost of shortening the comparator's deadline]\label{ch6:lem:reduce}
-For any $\mathbf m\in\Delta_{H_0}$, move all its fractions at ages $i>K$ to age one,
+For any $\mathbf m\in\Delta_{H}$, move all its fractions at ages $i>K$ to age one,
 producing $\bar{\mathbf m}\in\Delta_K$. Then
 \begin{equation}\label{ch6:eq:reduce}
- J_T(\bar{\mathbf m})-J_T(\mathbf m)\le L_uK\,\ind{K<H_0}.
+ J_T(\bar{\mathbf m})-J_T(\mathbf m)\le L_uK\,\ind{K<H}.
 \end{equation}
-No modification is needed when $K=H_0$.
+No modification is needed when $K=H$.
 \end{Thm:Lemma}
 \begin{proof}
 For $i>K$ and $s\le T-1$, put
@@ -1124,20 +1419,20 @@ In particular, $x_t(\bar{\mathbf m})\le x_t(\mathbf m)$ for every $t$.
 State reductions add linearly, while the action changes satisfy
 \[
 \sum_{t=1}^{T}|u_t(\bar{\mathbf m})-u_t(\mathbf m)|
-\le\sum_{s=1}^{T-1}\sum_{i=K+1}^{H_0}
+\le\sum_{s=1}^{T-1}\sum_{i=K+1}^{H}
 v_{s,i}\bigl(1+\ind{i\le h_s}\bigr).
 \]
 After summing Lemma~\ref{ch6:lem:earlier} over $t$,
 \begin{align}
 J_T(\bar{\mathbf m})-J_T(\mathbf m)
-&\le\sum_{s=1}^{T-1}\sum_{i=K+1}^{H_0}v_{s,i}
+&\le\sum_{s=1}^{T-1}\sum_{i=K+1}^{H}v_{s,i}
 \left[
 L_u\bigl(1+\ind{i\le h_s}\bigr)
 -\lambda\bigl(\min\{i,h_s\}-1\bigr)
 \right].
 \label{ch6:eq:moved-net}
 \end{align}
-If $K=H_0$, the double sum is empty.  Otherwise,
+If $K=H$, the double sum is empty.  Otherwise,
 \eqref{ch6:eq:K} gives $\lambda K\ge2L_u$, so for $i>K$,
 \[
 L_u(1+\ind{i\le h_s})-\lambda(\min\{i,h_s\}-1)
@@ -1151,7 +1446,7 @@ Consequently,
 \begin{align*}
 J_T(\bar{\mathbf m})-J_T(\mathbf m)
 &\le L_u\sum_{\substack{1\le s\le T-1\\1\le T-s\le K}}
-\sum_{i=K+1}^{H_0}w_sm_i\\
+\sum_{i=K+1}^{H}w_sm_i\\
 &\le L_u\sum_{s=T-K}^{T-1}1
 \le L_uK.
 \end{align*}
@@ -1160,12 +1455,12 @@ J_T(\bar{\mathbf m})-J_T(\mathbf m)
 For arrivals near the end of the cost horizon, moving service earlier can
 add a positive action term to the cost bound at or before $T$, while part
 of the compensating storage reduction occurs after $T$ and is excluded
-from the objective. When $K<H_0$, only arrivals $s=T-K,\ldots,T-1$ can
+from the objective. When $K<H$, only arrivals $s=T-K,\ldots,T-1$ can
 contribute a positive excess in the preceding bound. Their total size is at
 most $K$, and each unit contributes at most $L_u$, giving the term $L_uK$ in
 \eqref{ch6:eq:reduce}. This comparison allows the controller to use deadline
 $K$ while its regret is still measured against fixed policies with deadline
-$H$. The comparison bound can be replaced by zero when $K=H_0$, or when
+$H$. The comparison bound can be replaced by zero when $K=H$, or when
 every nonzero arrival's full original lifetime lies inside the cost horizon.
 
 \subsection{Regret bound for the chosen deadline}
@@ -1185,7 +1480,7 @@ Assume \eqref{ch6:eq:positive}, use $K$ in \eqref{ch6:eq:K}, $F=0$, and steps
 \begin{equation}\label{ch6:eq:positive-upper}
  \boxed{\Reg_T(\Delta_H)\le
  {C_\psi}[2L_u+(\lambda+V)(K-1)]\sqrt{T-1}\,\Lambda_K
- +L_uK\,\ind{K<H_0}.}
+ +L_uK\,\ind{K<H}.}
 \end{equation}
 In particular,
 \begin{equation}\label{ch6:eq:positive-rate}
@@ -1193,7 +1488,7 @@ In particular,
 \end{equation}
 \end{Thm:Theorem}
 \begin{proof}
-Let $\mathbf m^*$ minimize $J_T$ over $\Delta_{H_0}$, and let
+Let $\mathbf m^*$ minimize $J_T$ over $\Delta_{H}$, and let
 $\bar{\mathbf m}^*\in\Delta_K$ be its reduction from
 Lemma~\ref{ch6:lem:reduce}.  With $B$ from \eqref{ch6:eq:positive-B},
 \eqref{ch6:eq:positive-node} gives $|g_{s,I}|\le B$ at every node.
@@ -1211,7 +1506,7 @@ Therefore
   +J_T(\bar{\mathbf m}^*)-J_T(\mathbf m^*)\\
 &\le C_\psi[2L_u+(\lambda+V)(K-1)]
   \sqrt{T-1}\,\Lambda_K
-  +L_uK\ind{K<H_0}.
+  +L_uK\ind{K<H}.
 \end{align*}
 Equations \eqref{ch6:eq:S-bound} and \eqref{ch6:eq:positive-B} give
 \eqref{ch6:eq:positive-rate}.
@@ -1224,11 +1519,11 @@ If the oracle selects $\zeta^x=\lambda\ge0$ at every time and feasible pair,
 then the quadratic controller satisfies
 \begin{equation}\label{ch6:eq:constant}
  \Reg_T(\Delta_H)\le2L_u\sqrt{T-1}\,\Lambda_K
- +L_uK\,\ind{K<H_0}
+ +L_uK\,\ind{K<H}
  =O(L_u\sqrt{KT}+L_uK).
 \end{equation}
 The implied constant is independent of $\lambda$, and this is at most
-$O(L_u\sqrt{H_0T})$.
+$O(L_u\sqrt{HT})$.
 \end{Thm:Corollary}
 \begin{proof}
 With $V=0$, $C_\psi=1/2$, and \eqref{ch6:eq:K},
@@ -1237,13 +1532,13 @@ C_\psi[2L_u+\lambda(K-1)]
 \le\frac12(2L_u+2L_u)=2L_u.
 \]
 Apply Theorem~\ref{ch6:thm:positive}, \eqref{ch6:eq:S-bound}, and
-$K\le\sqrt{KT}\le\sqrt{H_0T}$.
+$K\le\sqrt{KT}\le\sqrt{HT}$.
 \end{proof}
 
 When $\lambda>0$ and $L_u$ are fixed, the deadline $K$ is bounded
 independently of $H$. For example, $\lambda=L_u=1$ gives
-$K=\min\{H_0,2\}$. When only $\zeta^x\ge0$ is known and no positive lower
-bound is available, \eqref{ch6:eq:K} gives $K=H_0$: long zero-cost holding
+$K=\min\{H,2\}$. When only $\zeta^x\ge0$ is known and no positive lower
+bound is available, \eqref{ch6:eq:K} gives $K=H$: long zero-cost holding
 periods cannot be excluded by this argument.
 Section~\ref{ch6:subsec:spikes} shows why nonnegativity alone does not give a
 bound independent of the magnitude of adversarial state marginals.
@@ -1489,7 +1784,7 @@ in Corollary~\ref{ch6:cor:constant}.
 If a known convex
 $f$ is not nondecreasing, \eqref{ch6:eq:known-state-cost} still falls under
 Theorem~\ref{ch6:thm:general} whenever $|f'|\le L_x$, and the same
-predictor is covered by Proposition~\ref{ch6:prop:forecast} with $K=H_0$.
+predictor is covered by Proposition~\ref{ch6:prop:forecast} with $K=H$.
 The refinement that can shorten the deadline then need not apply.
 
 \section{Implementation and Deadline Dependence}
@@ -1534,12 +1829,19 @@ constant factor. Together, these effects give the bound
  O\bigl((L_u+KL_x)\sqrt{KT}\bigr)
  =O\bigl(L_u\sqrt{KT}+L_xK^{3/2}\sqrt T\bigr).
 \]
-With $K=H_0$, these are the service and storage contributions in
+With $K=H$, these are the service and storage contributions in
 \eqref{ch6:eq:main-upper}.
 The storage-cost lower bound in the next section matches the state contribution.
 
 \section{Lower Bounds and Minimax Implications}
 \label{ch6:sec:lower}
+General optimization with memory already exhibits an
+$\Omega(Lh^{3/2}\sqrt T)$ lower bound for a suitable memory-$h$
+loss class \cite[Appendix D]{kumar2023unbounded}. The construction here
+establishes the storage-dependent rate within the admissible scalar
+system, against its fixed age policies and for all causal deadline-feasible
+controllers; it is not an automatic consequence of that broader class.
+
 All lower bounds below use oblivious instances: arrivals and cost functions
 are fixed before the first decision and are independent of the controller's internal
 randomization. Random signs are used only to construct a distribution over
@@ -1612,7 +1914,7 @@ has a deterministic oblivious instance with costs $c_t(x,u)=a_tx$,
 $|a_t|\le L_x$, such that
 \begin{equation}\label{ch6:eq:lower-state}
  \boxed{\E[\Reg_T(\Delta_H)]\ge
- \frac{L_x}{256\sqrt3}\,\min\{H,T\}^{3/2}\sqrt T.}
+ \frac{L_x}{256\sqrt3}\,H^{3/2}\sqrt T.}
 \end{equation}
 The state-marginal term in Theorem~\ref{ch6:thm:general} is therefore sharp up
 to universal constants in this range.
@@ -1697,11 +1999,11 @@ Consequently, with $S_n=\sum_j\varepsilon_j$,
  \ge\frac{L_xb^2}{4\sqrt3}\sqrt n.
  \label{ch6:eq:block-lower}
 \end{align}
-Recall $H_0=\min\{H,T\}$. Since $H/3\ge1$ and $T/4\ge1$,
+Since $H/3\ge1$ and $T/4\ge1$,
 $\lfloor H/3\rfloor\ge H/8$ and
-$\lfloor T/4\rfloor\ge T/8$, so
+$\lfloor T/4\rfloor\ge T/8\ge H/8$, where the last inequality uses $H\le T$. Thus
 \[
-b\ge\frac{H_0}{8}.
+b\ge\frac{H}{8}.
 \]
 Also, $\lfloor q\rfloor\ge q/2$ for $q\ge1$ gives
 \[
@@ -1712,7 +2014,7 @@ Thus
 \begin{align*}
 \frac{L_xb^2}{4\sqrt3}\sqrt n
 &\ge\frac{L_x}{8\sqrt6}b^{3/2}\sqrt T\\
-&\ge\frac{L_x}{256\sqrt3}H_0^{3/2}\sqrt T.
+&\ge\frac{L_x}{256\sqrt3}H^{3/2}\sqrt T.
 \end{align*}
 Averaging over the finite sign family fixes a deterministic oblivious
 instance with the same expected-regret lower bound for the given controller.
@@ -1725,7 +2027,7 @@ $a_t=L_x\xi_t$ for $t\ge3$, with earlier costs zero.
 Every controller again has zero expected cost, while the states of
 $\mathbf e_1,\mathbf e_2$ differ by one at each such time. Their comparison gives
 $L_x\sqrt{T-2}/(2\sqrt3)$, which is the same order as
-$L_x\min\{H,T\}^{3/2}\sqrt T$ for $H=2$.
+$L_xH^{3/2}\sqrt T$ for $H=2$.
 For $T=2$, all states within the cost horizon are predetermined, so no positive
 state-only regret lower bound is asserted. For $H=1$ regret is zero.
 The matching state lower bound allows increasing storage to either raise
@@ -1811,11 +2113,11 @@ For $H\ge3$, $T\ge4$, the established results imply
 \begin{equation}\label{ch6:eq:minimax-sandwich}
  \begin{split}
  \max\left\{\frac{L_u}{2\sqrt3}\sqrt{T-1},\,
- \frac{L_x}{256\sqrt3}H_0^{3/2}\sqrt T\right\}
+ \frac{L_x}{256\sqrt3}H^{3/2}\sqrt T\right\}
  &\le\mathfrak R_{T,H}(L_x,L_u),\\
  \mathfrak R_{T,H}(L_x,L_u)
- &\le\frac{2L_u+(H_0-1)L_x}{2}
- \sqrt{T-1}\,\Lambda_{H_0}.
+ &\le\frac{2L_u+(H-1)L_x}{2}
+ \sqrt{T-1}\,\Lambda_{H}.
  \end{split}
 \end{equation}
 The two subclasses give separate lower bounds, so their maximum bounds
@@ -1823,11 +2125,11 @@ the minimax regret from below.
 In particular,
 \begin{equation}\label{ch6:eq:state-minimax}
  \mathfrak R_{T,H}(L_x,0)
- =\Theta(L_xH_0^{3/2}\sqrt T)
+ =\Theta(L_xH^{3/2}\sqrt T)
  \quad(H\ge3,\ T\ge4).
 \end{equation}
 For fixed $L_x>0$ and bounded ratio $L_u/L_x$, the same dependence on
-$H_0,T$ follows for the general class, with constants allowed to depend
+$H,T$ follows for the general class, with constants allowed to depend
 on that ratio. These bounds do not establish matching dependence on
 $L_x$ and $L_u$ when they vary independently.
 
@@ -1835,13 +2137,13 @@ For consumption-only costs, the separate conclusion is
 \begin{equation}\label{ch6:eq:action-gap}
  \frac{L_u}{2\sqrt3}\sqrt{T-1}
  \le\mathfrak R_{T,H}(0,L_u)
- \le2(1+\sqrt2)L_u\sqrt{H_0(T-1)}
+ \le2(1+\sqrt2)L_u\sqrt{H(T-1)}
  \qquad(H\ge2,\ T\ge2).
 \end{equation}
 When costs depend only on consumption and the deadline is fixed, the
 bounds establish the optimal $\sqrt T$ growth. Their dependence on the
 deadline remains unresolved: the upper bound increases with
-$\sqrt{H_0}$, while the lower bound has no deadline factor. The state
+$\sqrt{H}$, while the lower bound has no deadline factor. The state
 lower bound uses costs that depend on storage, so it cannot answer this
 question for consumption-only costs. The sharp regret rate under the
 additional nonnegative storage-marginal assumptions in
@@ -1886,7 +2188,7 @@ the cost of maintaining separate learners for delayed feedback.
 
 Another direction is to prove a stronger lower bound for consumption-only
 costs. A lower bound that grows with the deadline could show whether the
-current $\sqrt{H_0}$ factor is necessary.
+current $\sqrt{H}$ factor is necessary.
 
 \section{Conclusion}
 \label{ch6:sec:conclusion}
