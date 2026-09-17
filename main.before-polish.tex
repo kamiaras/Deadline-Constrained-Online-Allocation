@@ -1,0 +1,2052 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Real}{\mathbb{R}}
+\newcommand{\Reg}{\mathrm{Reg}}
+\newcommand{\ind}[1]{\mathbf{1}_{\{#1\}}}
+\theoremstyle{plain}
+\newtheorem{Thm:Theorem}{Theorem}[section]
+\newtheorem{Thm:Lemma}[Thm:Theorem]{Lemma}
+\newtheorem{Thm:Proposition}[Thm:Theorem]{Proposition}
+\newtheorem{Thm:Corollary}[Thm:Theorem]{Corollary}
+\theoremstyle{remark}
+\newtheorem{Thm:Remark}[Thm:Theorem]{Remark}
+\numberwithin{equation}{section}
+\setlength{\emergencystretch}{3em}
+
+\title{Deadline-Constrained Online Allocation}
+\author{Kamiar Asgari}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We study online allocation in a lossless scalar storage system in which
+every arrival must be consumed within $H$ subsequent actions. Before
+observing each arrival and jointly convex state--action cost, a causal
+controller chooses its consumption. We compare its cumulative cost with
+the best fixed distribution over consumption ages. A controller based on
+a balanced binary tree chooses allocation fractions as their age intervals
+begin, guaranteeing complete service by every deadline. For
+$H_0=\min\{H,T\}$ and state and action subgradient bounds $L_x,L_u$, its regret is
+$O(L_u\sqrt{H_0T}+L_xH_0^{3/2}\sqrt T)$.
+Causal forecasts yield a prediction-error bound, while uniformly positive
+storage marginal costs can justify a shorter service deadline.
+A lower bound matches the storage-dependent term when state marginal costs
+may have either sign. For consumption-only costs, the lower bound is
+$\Omega(L_u\sqrt T)$, leaving the optimal deadline dependence open.
+\end{abstract}
+
+\section{Introduction}
+\label{ch6:sec:introduction}
+
+Resource availability and timely service impose different constraints on an
+online allocation policy. A storage controller may preserve feasibility by
+holding resource for later use, yet postpone that use indefinitely. A queue
+may have a bounded expected backlog while some individual arrivals wait a
+long time. In systems with a firm service commitment, the controller must
+also account for the age of each arrival and complete its allocation within
+a prescribed number of rounds. This paper studies the cost of learning
+under that additional requirement.
+
+We consider a lossless scalar storage system in which each nonnegative
+arrival must be consumed completely within the next $H$ actions. The
+controller selects its consumption before observing the current arrival
+and cost function. The revealed cost is jointly convex in the stored
+resource and the action, so it can express both the cost of holding resource
+and the cost of using it, including interactions between the two. Arrivals
+and costs may be adversarial. We compare the controller with policies that
+use the same consumption schedule for every arrival. With a two-round
+deadline, for example, a policy could consume half of every arrival in the
+next round and half in the following round. Regret measures the extra total
+cost relative to the best such fixed schedule chosen after the arrivals and
+costs are known.
+
+Delay-constrained packet scheduling is a motivating application:
+arrivals represent queued data, actions represent transmissions, and the
+consumption deadline becomes a maximum service delay. The simplex policy
+class is then a family of scheduling filters. Section~\ref{ch6:subsec:delay-scheduling}
+makes this connection explicit and relates it to convex transmission-energy
+costs.
+
+The main difficulty is that an allocation decision has consequences at
+several future times. Consuming one unit later changes its service cost
+and every intervening storage cost. Choosing an entire schedule when an
+arrival enters the system would commit before any of those costs is
+observed. Instead, the controller developed here divides the available ages
+into a balanced binary tree. It chooses how much resource to send to the
+earlier and later halves only when the corresponding interval begins.
+This leaves later decisions open to new
+information while enforcing the deadline by conservation at every split.
+
+\subsection{Contributions and organization}
+
+The paper establishes the following results, with
+$H_0=\min\{H,T\}$ and $L_x,L_u$ denoting bounds on the state and action
+components of a joint subgradient.
+\begin{enumerate}[leftmargin=*]
+\item A causal controller chooses allocation fractions as their age intervals
+begin, serves every arrival by its deadline, and competes with the full class
+of fixed age-allocation policies. Its general regret
+bound is
+\[
+ O\!\left(L_u\sqrt{H_0T}+L_xH_0^{3/2}\sqrt T\right).
+\]
+\item The controller can use forecasts of future costs to decide how much
+resource to consume earlier and how much to leave for later. It then uses
+the observed costs to update future allocation decisions. We give a regret
+bound that can improve when these forecasts accurately predict the cost
+difference between earlier and later consumption.
+\item When keeping an extra unit in storage costs at least a known positive
+amount each round, the savings from delaying consumption can be outweighed
+by the accumulated storage cost. We identify when this allows the controller
+to use a shorter service deadline while still competing with all fixed
+allocation policies permitted by the original deadline. We also bound the
+extra comparison cost associated with arrivals near the end of the time
+horizon.
+\item When storing more resource can either increase or decrease cost, we
+prove a lower bound matching the $L_xH_0^{3/2}\sqrt T$ term in our regret
+bound, showing that this term is unavoidable in the worst case. When costs
+depend only on consumption, the lower bound is $\Omega(L_u\sqrt T)$, but
+whether a longer deadline necessarily increases the worst-case regret
+remains open.
+\end{enumerate}
+
+Section~\ref{ch6:sec:related} places the model in the literature.
+Sections~\ref{ch6:sec:model} and~\ref{ch6:sec:applications} specify the
+model and its application scope. Sections~\ref{ch6:sec:algorithm}
+and~\ref{ch6:sec:analysis} give the controller and general regret proof.
+Sections~\ref{ch6:sec:positive} and~\ref{ch6:sec:prediction} develop the
+refinement that can shorten the deadline and causal forecasts.
+Sections~\ref{ch6:sec:implementation} and~\ref{ch6:sec:lower} discuss
+implementation and lower bounds. Section~\ref{ch6:sec:next} identifies
+future research directions, and Section~\ref{ch6:sec:conclusion} closes
+the paper.
+
+\section{Related Work}
+\label{ch6:sec:related}
+
+\subsection{Online optimization with memory and dynamical systems}
+
+Anava, Hazan, and Mannor~\cite{anava2015memory} study online convex
+optimization when a loss depends on several recent decisions. Their
+framework makes explicit a difficulty that also arises here: changing a
+decision can affect costs beyond the round in which it is selected.
+Kumar, Dean, and Kleinberg~\cite{kumar2023unbounded} study how past decisions
+affect losses with unbounded memory. In this paper, an arrival
+contributes to the stored state until its service is complete, so choosing
+its consumption age changes several future costs.
+
+A related connection is nonstochastic control. Agarwal
+et al.~\cite{agarwal2019online} consider linear dynamics with adversarial
+disturbances and general convex state--action costs, using regret against
+a class of strongly stable linear controllers. This paper shares the
+adversarial viewpoint and evaluates each comparator on its own trajectory.
+Its comparator is instead a fixed distribution over consumption ages.
+Moreover, feasibility includes complete service of every arrival by its
+deadline. The age representation enforces this obligation directly and
+makes the influence of each arrival end after finitely many actions.
+
+\subsection{Delayed feedback and optimistic learning}
+
+Joulani, Gy\"orgy, and Szepesv\'ari~\cite{joulani2013delayed} give general
+reductions from learning with delayed feedback to learning without delays.
+To handle delayed feedback, the controller cycles among separate copies of
+the learning algorithm, reusing a copy only after feedback from its previous
+decision is available. Here, however, the delay is generated by the controller's
+interval decomposition. The round cost is observed immediately after the
+action, while the full marginal comparison between two age intervals
+requires observations from later rounds.
+
+Rakhlin and Sridharan~\cite{RakhlinSridharan2013} develop online learning
+methods that exploit predictable sequences while retaining worst-case
+guarantees. The prediction--correction controller follows the same
+principle: a causal prediction influences the current split, and the
+realized feedback subsequently corrects the reference point. Its guarantee
+depends on prediction errors in local marginal comparisons.
+
+\subsection{Delay-constrained scheduling and deferrable service}
+\label{ch6:subsec:related-scheduling}
+
+Hard deadlines have long been central to energy-efficient scheduling.
+Yao, Demers, and Shenker~\cite{yao1995scheduling} study jobs with release
+times and deadlines on a variable-speed processor, with convex power
+consumption. Their work includes optimal offline scheduling and competitive
+analysis of online policies.
+
+The closest scheduling connection is Khojastepour and Sabharwal's
+\emph{Delay-Constrained Scheduling: Power Efficiency, Filter Design, and
+Bounds}~\cite{khojastepour2004delay}. They minimize average transmit power
+over Gaussian channels subject to a maximum delay for every packet. Their
+robust schedulers do not require knowledge of source-arrival statistics,
+and their analysis connects feasible schedules to time-varying linear
+filters. Under i.i.d.\ arrivals, their optimal time-invariant scheduler
+is a moving-average filter of length equal to the delay bound,
+independently of the arrival distribution. This gives
+a concrete link to the uniform age-allocation policy within the present comparator
+class.
+
+These connections motivate interpreting arrivals as divisible work and
+consumption as service. A fixed age distribution is a nonnegative,
+normalized finite filter applied to past arrivals, while the controller
+developed here adapts the service distribution before each remaining interval
+begins. The objective here is regret against all fixed age distributions
+under costs revealed after service decisions. This differs from an offline
+minimum-energy objective or a competitive ratio against an unrestricted
+offline schedule. Section~\ref{ch6:sec:applications} states the common
+physical scope, and Section~\ref{ch6:subsec:delay-scheduling} develops the
+communication-buffer interpretation and an explicit convex energy-cost
+specialization.
+
+\subsection{Storage management and energy harvesting}
+
+Asgari and Neely~\cite{10.1145/3428337} combine Bregman-based online
+optimization with energy-harvesting constraints, assuming independent,
+identically distributed energy arrivals with an unknown distribution.
+Their work connects learning guarantees to available battery resources.
+The present setting requires consumption not to exceed stored resource but allows
+adversarial arrivals and imposes an explicit maximum residence time.
+
+Chau, Zhang, and Chen~\cite{chau2016cost} analyze online energy-storage
+management through competitive guarantees relative to a fully informed
+offline policy. That perspective addresses a different performance
+question from the fixed-policy regret considered here.
+
+\section{Model, Information, and Benchmark}
+\label{ch6:sec:model}
+
+We write $\Real_+$ for the nonnegative reals, $[n]=\{1,\ldots,n\}$,
+$\E$ for expectation, and $\ind{A}$ for the indicator of an event $A$.
+Bold symbols denote vectors, and $\partial f$ denotes the subdifferential.
+All logarithms are natural unless a base is shown. Empty sums are zero,
+and $0\log0=0$ in entropy expressions. For scalar clipping, write
+$[v]_\ell^r=\min\{r,\max\{\ell,v\}\}$.
+
+\subsection{Lossless dynamics and joint costs}
+Let $T\ge1$ be the cost horizon and $H\ge1$ the consumption deadline.
+Write $x_t,u_t,w_t$ for the stored resource, consumption, and arrival in
+round $t$. The system starts empty and evolves as
+\begin{equation}\label{ch6:eq:dynamics}
+ x_1=0,\qquad x_{t+1}=x_t-u_t+w_t,\qquad
+ 0\le u_t\le x_t,\qquad w_t\in[0,1].
+\end{equation}
+At the beginning of round $t$, the controller knows the current state and
+all arrivals and costs revealed through round $t-1$. It selects $u_t$ before
+observing $w_t$ and $c_t$. After the action, the arrival and the entire cost
+function are revealed, and the controller incurs $c_t(x_t,u_t)$.
+The state in this cost is the beginning-of-round state; the arrival $w_t$
+first enters $x_{t+1}$.
+
+Each $c_t$ is a finite jointly convex function on
+\begin{equation}\label{ch6:eq:domain}
+ \mathcal{D}_H=\{(x,u):0\le u\le x\le H\}.
+\end{equation}
+Assume a joint-subgradient oracle: at every $(x,u)\in\mathcal{D}_H$, it can return
+one pair $(\zeta^x,\zeta^u)$ such that
+\begin{equation}\label{ch6:eq:support}
+ c_t(x',u')\ge c_t(x,u)+\zeta^x(x'-x)+\zeta^u(u'-u)
+ \quad\text{for all }(x',u')\in\mathcal{D}_H,
+\end{equation}
+and
+\begin{equation}\label{ch6:eq:bounded-grad}
+ |\zeta^x|\le L_x,\qquad |\zeta^u|\le L_u,
+\end{equation}
+for known finite constants $L_x,L_u\ge0$.
+At the realized pair write
+\begin{equation}\label{ch6:eq:actual-grad}
+ \boldsymbol{\zeta}_t\coloneqq(\zeta_t^x,\zeta_t^u)^\top
+ \in\partial c_t(x_t,u_t)
+\end{equation}
+for an oracle selection satisfying these bounds; its components are the state and action marginal costs.
+For nonsmooth costs the two numbers must belong to the \emph{same joint
+subgradient}; unrelated coordinatewise subgradients need not satisfy
+\eqref{ch6:eq:support}.
+Applying \eqref{ch6:eq:support} in both directions between two feasible
+pairs and using \eqref{ch6:eq:bounded-grad} gives
+\begin{equation}\label{ch6:eq:lipschitz}
+ |c_t(x,u)-c_t(x',u')|\le L_x|x-x'|+L_u|u-u'|.
+\end{equation}
+
+The entire cost $c_t(x,u)$ may vary adversarially and may couple $x$ and $u$.
+The residual-inventory example in
+Section~\ref{ch6:subsec:coupled-penalties} illustrates an admissible
+nonseparable cost and its signed marginals.
+The regret bound holds for every realized arrival and cost sequence,
+including sequences chosen in response to the controller. Once this
+sequence has been produced, we keep it fixed when evaluating each
+comparison policy. Each policy generates its own storage and consumption
+trajectory, but all policies face the same arrivals and cost functions.
+
+\subsection{Consuming each arrival fully by its deadline}
+Arrival $w_s$ becomes available for the actions at times $s+1,s+2,\ldots$.
+Let $q_{s,i}$ be its fraction actually consumed at age $i$. Thus $t$ indexes
+rounds, $s$ arrivals, and $i$ ages. Feasible deadline accounting requires
+\begin{equation}\label{ch6:eq:deadline}
+ q_{s,i}\ge0,\qquad \sum_{i=1}^Hq_{s,i}=1,\qquad
+ u_t=\sum_{i=1}^H w_{t-i}q_{t-i,i},
+\end{equation}
+with $w_s=0$ for $s\le0$. There is no service of $w_s$ outside
+$s+1,\ldots,s+H$. The complete vector $\mathbf q_s$ need not be chosen upon arrival:
+a causal controller may choose its fractions progressively, provided the
+service at each time is determined before that time's cost is revealed.
+For $w_s=0$, any such allocation vector can be used.
+
+\begin{Thm:Proposition}[State identity and exact feasibility]\label{ch6:prop:state}
+For any causal implementation of \eqref{ch6:eq:deadline},
+\begin{equation}\label{ch6:eq:state}
+ x_t=\sum_{i=1}^H w_{t-i}\sum_{j=i}^Hq_{t-i,j}.
+\end{equation}
+The dynamics \eqref{ch6:eq:dynamics} hold, every arrival is completely consumed
+by its deadline, and $0\le u_t\le x_t\le H$. If, for some integer
+$1\le K\le H$, all fractions have support in $1,\ldots,K$, then
+$0\le u_t\le x_t\le K$.
+\end{Thm:Proposition}
+\begin{proof}
+At the beginning of round $t$, the unserved part of arrival $w_{t-i}$ is
+\[
+w_{t-i}\left(1-\sum_{j=1}^{i-1}q_{t-i,j}\right)
+=w_{t-i}\sum_{j=i}^{H}q_{t-i,j}.
+\]
+Summing over the possible ages gives \eqref{ch6:eq:state}, and
+\begin{align*}
+0\le u_t
+&=\sum_{i=1}^{H}w_{t-i}q_{t-i,i}\\
+&\le\sum_{i=1}^{H}w_{t-i}\sum_{j=i}^{H}q_{t-i,j}
+=x_t.
+\end{align*}
+The state identity also gives
+\begin{align*}
+x_t-u_t+w_t
+&=w_t+\sum_{i=1}^{H}w_{t-i}\sum_{j=i+1}^{H}q_{t-i,j}\\
+&=w_t+\sum_{i=2}^{H}w_{t+1-i}\sum_{j=i}^{H}q_{t+1-i,j}\\
+&=\sum_{i=1}^{H}w_{t+1-i}\sum_{j=i}^{H}q_{t+1-i,j}
+=x_{t+1},
+\end{align*}
+using $\sum_{j=1}^{H}q_{t,j}=1$.  Moreover,
+\[
+0\le\sum_{j=i}^{H}q_{t-i,j}\le1,
+\qquad
+x_t\le\sum_{i=1}^{H}w_{t-i}\le H.
+\]
+If $q_{s,i}=0$ for $i>K$, the sums reduce to $1\le i\le K$, giving
+$x_t\le K$.  Since $\sum_{i=1}^{H}w_sq_{s,i}=w_s$, every arrival is
+exhausted by age $H$ (by age $K$ under the support restriction).
+\end{proof}
+
+\subsection{Fixed probability-simplex policies}
+\label{ch6:subsec:fixed-policies}
+Define
+\begin{equation}\label{ch6:eq:simplex}
+ \Delta_H=\left\{\mathbf m\in\Real_+^H:\sum_{i=1}^Hm_i=1\right\}.
+\end{equation}
+A fixed $\mathbf m\in\Delta_H$ assigns the same schedule to every arrival:
+\begin{equation}\label{ch6:eq:fixed-pair}
+ u_t(\mathbf m)=\sum_{i=1}^Hm_iw_{t-i},\qquad
+ x_t(\mathbf m)=\sum_{i=1}^Hw_{t-i}\sum_{j=i}^Hm_j.
+\end{equation}
+Both coordinates are affine in $\mathbf m$, and the trajectory is feasible from
+time one. The equivalent cumulative coordinates satisfy
+$y_i=\sum_{j=1}^im_j$ and $0=y_0\le y_1\le\cdots\le y_H=1$.
+In these coordinates, the state formula becomes
+\[
+ x_t(\mathbf m)=\sum_{i=1}^Hw_{t-i}(1-y_{i-1}),
+\]
+which expresses the stored resource through cumulative consumption,
+with no storage decay and complete consumption by age $H$.
+
+Write
+\begin{equation}\label{ch6:eq:objective}
+ J_T^{\mathrm{on}}=\sum_{t=1}^Tc_t(x_t,u_t),\qquad
+ J_T(\mathbf m)=\sum_{t=1}^Tc_t(x_t(\mathbf m),u_t(\mathbf m)),
+\end{equation}
+and
+\begin{equation}\label{ch6:eq:regret}
+ \Reg_T(\Delta_H)=J_T^{\mathrm{on}}-\min_{\mathbf m\in\Delta_H}J_T(\mathbf m).
+\end{equation}
+Continuity from \eqref{ch6:eq:lipschitz} and compactness ensure existence of the
+minimizer. The minimization chooses a common age distribution in hindsight.
+All cost functions and arrivals
+in \eqref{ch6:eq:objective} are the same realized functions and arrivals,
+but each policy uses its own state.
+
+\subsection{Service and costs after the horizon}\label{ch6:subsec:terminal}
+Set $w_t=0$ for $t>T$ and execute all outstanding service through the actual
+deadlines. Costs after $T$ are excluded from \eqref{ch6:eq:objective}; equivalently,
+use zero cost functions and zero gradients there solely for analysis and
+updates. If the costs of serving the remaining arrivals after the horizon are
+part of the objective, include those rounds in $T$ for both policies.
+
+For nontrivial learning let
+\begin{equation}\label{ch6:eq:horizons}
+ N=T-1,\qquad H_0=\min\{H,T\}.
+\end{equation}
+For each integer $1\le K\le H$, we identify a policy in $\Delta_K$ with its zero-padded
+vector in $\Delta_H$ when evaluating its trajectory and $J_T$; the same
+convention applies to $\Delta_{H_0}$.
+The arrival $w_T$ cannot affect any cost through $T$ and may be served at
+$T+1$. Only arrivals $s=1,\ldots,N$ can affect costs included in the objective. If $H>T$, move every
+comparator weight at an age greater than $T$ to age $T$. Arrival indices
+begin at $s=1$, so even service at age $T$ occurs at time $s+T>T$. Both the
+original and the moved service therefore occur after the cost horizon.
+The move leaves the stored and consumed amounts unchanged through round $T$,
+so $\Delta_{H_0}$ represents the original benchmark exactly on that horizon.
+Every state within this horizon is also bounded by $\min\{H,t-1\}$.
+
+For $T=1$ or $H=1$ regret is zero. The formulas below are stated for
+$T\ge2$.
+
+\section{Applications and Modeling Scope}
+\label{ch6:sec:applications}
+
+The model describes a divisible quantity that can be stored without loss
+and must be served within the same allowed number of rounds after each arrival. There is no
+independent service-capacity limit beyond resource availability in
+\eqref{ch6:eq:dynamics}: several arrivals may be served together, and no
+additional constraint $u_t\le1$ is imposed. Available storage must accommodate
+the states permitted by \eqref{ch6:eq:domain}.
+
+\subsection{Delay-constrained packet scheduling}
+\label{ch6:subsec:delay-scheduling}
+
+In a fluid communication buffer, $w_t$ is newly arriving data, $x_t$ is
+the queued data before transmission, and $u_t$ is the amount successfully
+transmitted in round $t$. An arrival at the end of round $s$ must be fully
+transmitted during rounds $s+1,\ldots,s+H$. The constraint is therefore a
+maximum delay for each arrival, in addition to the requirement that the
+transmitter serve only data already in its buffer. Smoothing a burst over
+several rounds can reduce a convex transmission-energy cost, but the delay
+bound limits how long the scheduler can defer that service.
+
+This is the scheduling setting motivating the connection to
+Khojastepour and Sabharwal's \emph{Delay-Constrained Scheduling: Power
+Efficiency, Filter Design, and Bounds}~\cite{khojastepour2004delay}.
+The action of a fixed policy in \eqref{ch6:eq:fixed-pair} is a scheduling filter,
+with weights in \eqref{ch6:eq:simplex}.
+Nonnegative coefficients preserve causality and resource availability,
+and their unit sum ensures complete transmission within $H$ rounds.
+The uniform choice $m_i=1/H$ gives the moving-average schedule
+$u_t=H^{-1}\sum_{i=1}^{H}w_{t-i}$.
+The controller learns an adaptive allocation of each arrival across
+these ages and measures its performance against the best fixed filter
+on the realized sequence. Section~\ref{ch6:subsec:related-scheduling}
+discusses the relationship to the earlier scheduling objective.
+
+For a concrete energy-aware specialization, let
+\[
+ c_t(x,u)=\rho_t P(u)+\lambda x,
+ \qquad 0\le\rho_t\le\bar\rho,\qquad \lambda\ge0,
+\]
+where $P$ is a known differentiable convex transmission-energy function
+with $0\le P'(u)\le G_P$ on $[0,H]$. The coefficient $\rho_t$ is an
+energy price or cost weight revealed after the action. The joint gradient
+is $(\lambda,\rho_tP'(u))$, so one may take $L_x=\lambda$ and
+$L_u=\bar\rho G_P$. The case $\lambda=0$ uses the consumption-only
+guarantee in Corollary~\ref{ch6:cor:action}; Corollary~\ref{ch6:cor:constant}
+applies to the constant nonnegative state marginal cost $\lambda$. Setting $\rho_t=1$ and
+$\lambda=0$ recovers a fixed convex transmit-energy objective.
+
+This specialization assumes successful service. Unknown channel capacity
+and failed transmissions would change both the service feasibility and
+the feedback.
+
+\subsection{Coupled penalties and the role of signed marginals}
+\label{ch6:subsec:coupled-penalties}
+
+For a
+target residual inventory $d_t\in[0,H]$ revealed after service, consider
+\[
+ c_t(x,u)=\frac{(x-u-d_t)^2}{2H}.
+\]
+This jointly convex cost penalizes deviation of the resource remaining after service and before the new arrival,
+$x-u$, from a target. Its state and action marginals have magnitudes at
+most one, so $L_x=L_u=1$ is valid. The state marginal can be negative when
+the residual is below the target. The general theorem applies, whereas the
+nonnegative
+state-marginal refinement need not. This example shows why a nonnegative
+\emph{cost value} is different from a nonnegative \emph{state marginal}.
+
+The regret guarantee for all these applications uses the benchmark in
+Section~\ref{ch6:subsec:fixed-policies}.
+
+\section{Allocation over Age Intervals and Delayed Mirror-Descent Updates}
+\label{ch6:sec:algorithm}
+Choose a deadline $1\le K\le H_0$ for the controller. The general controller uses
+$K=H_0$; Section~\ref{ch6:sec:positive} gives a justified reduction when
+state marginals have a uniform positive lower bound.
+
+\subsection{Age intervals and causal routing}
+Build a balanced binary tree $\mathcal{T}_K$ on the ordered leaves $1,\ldots,K$.
+Tree intervals $[a,b]$ denote the integer age sets $\{a,\ldots,b\}$.
+For an internal node $I=[a,b]$, write $a_I=\min I=a$. Its length
+and children are
+\begin{equation}\label{ch6:eq:tree-def}
+ d_I=b-a+1,\qquad r_I=\lfloor(a+b)/2\rfloor+1,\qquad
+ I_{\mathrm{L}}=[a,r_I-1],\quad I_{\mathrm{R}}=[r_I,b].
+\end{equation}
+Let $\mathcal{I}_K$ be its set of internal nodes.
+For arrival $s$, select $p_{s,I}\in[0,1]$ at the end of round $s+a-1$.
+Route fraction $p_{s,I}$ of the resource assigned to $I$ to its left child,
+and the remainder to its right child. Retain right-child resource until
+its interval begins. Each leaf consumes all incoming resource at its age.
+Simultaneously starting decisions are processed from ancestors to descendants.
+The root receives $w_s$ when it arrives.
+
+The fractions are deterministic divisions of divisible resource, not
+randomized service choices. The final fraction
+$q_{s,i}$ is the product of the routing factors on the path to leaf $i$.
+All factors on that path have been chosen by the
+end of $s+i-1$. They are nonnegative and their leaf products sum to one.
+Proposition~\ref{ch6:prop:state} therefore proves causality, feasibility, and
+complete service by age $K\le H$, independently of how the splits are learned.
+
+\subsection{A four-age example}
+\label{ch6:subsec:example}
+
+Figure~\ref{ch6:fig:routing} illustrates the timing for $K=4$.
+Suppose one unit arrives at the end of round $s$. At that time, the root
+assigns half to ages $1,2$ and half to ages $3,4$. The first child
+immediately assigns one quarter of its incoming half to age one. The
+second child's split can wait until the end of round $s+2$, after two
+more costs have been observed. If that later split assigns three quarters
+to age three, the final allocation vector is
+\[
+ \mathbf q_s=(q_{s,1},q_{s,2},q_{s,3},q_{s,4})^\top
+ =\left(\frac18,\frac38,\frac38,\frac18\right)^\top.
+\]
+This example uses illustrative split fractions to show how a feasible
+allocation is assembled as successive age intervals begin.
+
+\begin{figure}[tb]
+\centering
+\setlength{\unitlength}{1mm}
+\begin{picture}(138,67)
+\put(44,59){\makebox(50,5){$[1,4]$: decide at end of $s$}}
+\put(63,56){\vector(-3,-2){27}}
+\put(75,56){\vector(3,-2){27}}
+\put(37,49){\makebox(12,5){$1/2$}}
+\put(88,49){\makebox(12,5){$1/2$}}
+\put(3,30){\makebox(55,6){$[1,2]$: end of $s$}}
+\put(78,30){\makebox(58,6){$[3,4]$: end of $s+2$}}
+\put(27,29){\vector(-1,-1){15}}
+\put(34,29){\vector(1,-1){15}}
+\put(103,29){\vector(-1,-1){15}}
+\put(111,29){\vector(1,-1){15}}
+\put(9,22){\makebox(12,5){$1/4$}}
+\put(41,22){\makebox(12,5){$3/4$}}
+\put(85,22){\makebox(12,5){$3/4$}}
+\put(117,22){\makebox(12,5){$1/4$}}
+\put(0,7){\makebox(25,5){Age $1$}}
+\put(37,7){\makebox(25,5){Age $2$}}
+\put(76,7){\makebox(25,5){Age $3$}}
+\put(113,7){\makebox(25,5){Age $4$}}
+\put(0,0){\makebox(25,5){$q_{s,1}=1/8$}}
+\put(37,0){\makebox(25,5){$q_{s,2}=3/8$}}
+\put(76,0){\makebox(25,5){$q_{s,3}=3/8$}}
+\put(113,0){\makebox(25,5){$q_{s,4}=1/8$}}
+\end{picture}
+\caption[Allocation over four consumption ages]{Allocation over four consumption ages. Edge labels
+are fractions of the resource entering their parent. Leaf $i$ serves
+its assigned resource at time $s+i$; the right subtree can use information
+revealed after the earlier service decisions.}
+\label{ch6:fig:routing}
+\end{figure}
+
+\subsection{Marginal feedback from the actual joint cost}
+After each round within the cost horizon, obtain the joint pair
+$(\zeta_t^x,\zeta_t^u)$ in \eqref{ch6:eq:actual-grad}; set both components to zero
+after $T$. For arrival $s\le N$ define
+\begin{equation}\label{ch6:eq:leaf}
+ A_{s,i}=w_s\left(\zeta_{s+i}^u+\sum_{k=1}^{i}\zeta_{s+k}^x\right),
+ \qquad i=1,\ldots,K.
+\end{equation}
+In the linearized total cost, $A_{s,i}$ is the coefficient of the fraction
+of arrival $s$ served at age $i$. Its service term comes from round $s+i$,
+while its storage terms come from rounds $s+1,\ldots,s+i$. The storage sum
+includes the service round because the cost uses the beginning-of-round
+state. The factor $w_s$ converts an allocation fraction into an amount of
+resource. All subgradients are evaluated along the controller's realized
+trajectory.
+
+Define subtree values recursively by
+\begin{equation}\label{ch6:eq:values}
+ V_{s,\{i\}}=A_{s,i},\qquad
+ V_{s,I}=p_{s,I}V_{s,I_{\mathrm{L}}}+(1-p_{s,I})V_{s,I_{\mathrm{R}}}.
+\end{equation}
+The value $V_{s,I}$ is an average of the marginal-cost coefficients for
+ages in $I$, with weights determined by the controller's splits within that
+node's subtree. It gives the linearized cost coefficient for routing an amount $w_s$
+through $I$ according to those splits.
+The scalar feedback is
+\begin{equation}\label{ch6:eq:g}
+ g_{s,I}=V_{s,I_{\mathrm{L}}}-V_{s,I_{\mathrm{R}}}.
+\end{equation}
+This feedback compares routing an amount $w_s$ through the earlier child
+with routing that amount through the later child, using the observed cost
+slopes and the controller's splits within each child's subtree. A positive value
+favors sending less resource to the earlier interval on future uses of
+this learner; a negative value favors sending more.
+
+At each node, we compare the costs of routing the full arrival amount
+through the earlier and later children. This is a hypothetical comparison,
+so we calculate it even when the controller sends no resource to that
+node. Split fractions must therefore be chosen in unused branches as
+well. In the regret proof, each comparison is weighted by the fraction
+that the fixed comparison policy assigns to that node, denoted $M_I$;
+see Lemma~\ref{ch6:lem:tree}.
+
+At a node $I=[a,b]$ spanning $d_I$ ages, complete feedback becomes
+available $d_I$ rounds after the split is chosen. We therefore maintain
+$d_I$ separate copies of the learning rule and use them in turn for
+successive arrivals. Each copy receives feedback from its previous
+decision before it is used again. In particular, the copy used for
+arrival $s$ is next used for arrival $s+d_I$, at the end of round
+\begin{equation}\label{ch6:eq:timing}
+ (s+d_I)+a-1=s+b.
+\end{equation}
+Bounded-delay reductions are standard \cite{joulani2013delayed}.
+The controller collects observations
+during the interval and updates the learner when the full comparison is available.
+
+\subsection{Updating a split with quadratic or entropy penalties}
+Each learner stores a reference split $z\in[0,1]$, initially $1/2$.
+To choose a split, it balances the predicted cost against a penalty for
+moving away from $z$. The default penalty is the squared distance
+$\tfrac12(p-z)^2$. We also analyze the binary relative entropy penalty
+$\operatorname{kl}(p\|z)$. We write $D_\psi(p,z)$ when either penalty can
+be used.
+Explicitly,
+\[
+ D_{\psi_Q}(p,z)=\frac12(p-z)^2,\qquad
+ D_{\psi_E}(p,z)=\operatorname{kl}(p\|z)
+ =p\log\frac pz+(1-p)\log\frac{1-p}{1-z}.
+\]
+The entropy formula is defined for $p\in[0,1]$ and $z\in(0,1)$.
+Appendix~\ref{app:geometry} gives the generating functions and their
+basic bounds.
+In this paper $\psi$ denotes the regularizer and $F_{s,I}$ the predictor.
+
+The function $F_{s,I}(p)$ predicts how the local cost changes with the
+fraction $p$ sent to the earlier interval. Its derivative at the chosen
+split is the prediction of $g_{s,I}$ used in the regret bound. For example,
+a forecast $\widehat g$ of this marginal comparison gives the linear
+predictor $F_{s,I}(p)=\widehat g p$. The predictor must use only information
+available when the split is chosen.
+
+At the decision time choose a convex differentiable predictor
+$F_{s,I}:[0,1]\to\Real$ with finite derivative satisfying this information
+requirement, and choose
+\begin{equation}\label{ch6:eq:play}
+ p_{s,I}=\argmin_{p\in[0,1]}
+ \{\eta_IF_{s,I}(p)+{D_\psi}(p,z_{s,I})\}.
+\end{equation}
+The basic algorithm uses $F_{s,I}=0$, so $p_{s,I}=z_{s,I}$.
+When $g_{s,I}$ is complete, update the \emph{reference value stored by the same learner} by
+\begin{equation}\label{ch6:eq:correct}
+ z_{s+d_I,I}=\argmin_{z\in[0,1]}
+ \{\eta_Ig_{s,I}z+{D_\psi}(z,z_{s,I})\}.
+\end{equation}
+Minimizing these scalar objectives gives the closed forms
+(see Appendix~\ref{app:geometry})
+\begin{align}
+ z_{s+d_I,I}&=[z_{s,I}-\eta_Ig_{s,I}]_0^1,&&\text{quadratic},\label{ch6:eq:quad}\\
+ z_{s+d_I,I}&=\frac{z_{s,I}\exp(-\eta_Ig_{s,I})}
+ {1-z_{s,I}+z_{s,I}\exp(-\eta_Ig_{s,I})},&&\text{binary entropy}.\label{ch6:eq:entropy}
+\end{align}
+The prediction shifts the chosen split away from the reference $z_{s,I}$.
+Once feedback arrives, the next reference incorporates the observed
+marginal comparison starting from that original reference. For example,
+with quadratic regularization, a linear predictor $F(p)=\widehat g p$,
+and no active boundary constraint, the chosen split is
+$p=z-\eta_I\widehat g$. Updating from $p$ would give
+$z-\eta_I(\widehat g+g)$, retaining the predicted step in addition to the
+observed step. Updating from $z$ gives $z-\eta_Ig$.
+
+With the entropy penalty, the reference values and chosen splits remain strictly between zero and one for finite feedback and derivatives;
+quadratic iterates may equal zero or one. Both the split-selection and reference-update minimizations have
+unique solutions. The one-step bound is proved in
+Lemma~\ref{app:lem:optimistic}.
+
+\begin{algorithm}[tb]
+\caption{Deadline allocation with joint costs}
+\label{ch6:alg:controller}
+\begin{algorithmic}[1]
+\Require $T$, $K\le H_0$, tree $\mathcal{T}_K$, regularizer $\psi$, positive
+ steps $\eta_I$, causal predictor rule $F$
+\State If $K=1$, serve every arrival at age one and stop.
+\State Initialize every node's $d_I$ reference copies to $1/2$;
+ initialize resource and feedback records to zero.
+\For{$t=1,\ldots,T+K$}
+ \State Execute the due leaf services, whose sum is $u_t$.
+ \If{$t\le T$}
+  \State Observe $w_t,c_t$; incur $c_t(x_t,u_t)$; obtain one joint
+  subgradient $(\zeta_t^x,\zeta_t^u)$ at $(x_t,u_t)$.
+ \Else
+  \State Set $w_t\gets0$, $\zeta_t^x\gets0$, and $\zeta_t^u\gets0$; add no new objective term.
+ \EndIf
+ \State Set $x_{t+1}\gets x_t-u_t+w_t$.
+ \State Complete due leaf and subtree values using \eqref{ch6:eq:leaf}--\eqref{ch6:eq:values},
+ descendants before ancestors.
+ \State For each completed $(s,I)$, form $g_{s,I}$ and update its copy
+ by \eqref{ch6:eq:correct}.
+ \State For each starting $(s,I)$ with $1\le s\le N$ and
+ $t=s+a_I-1$, choose the split in \eqref{ch6:eq:play} and route its mass,
+ ancestors before descendants.
+ \State If $t=T$, assign $w_T$ to service at $T+1$.
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\section{Regret Analysis for General Joint Costs}
+\label{ch6:sec:analysis}
+
+\subsection{Regularizer constants and a prediction-error bound at one node}
+For the two regularizers define constants by
+\begin{equation}\label{ch6:eq:geometry}
+ {D_\psi}(p,z)\ge\frac{\sigma_\psi}{2}(p-z)^2,\qquad
+ \sup_{p\in[0,1]}{D_\psi}(p,1/2)\le{A_\psi},\qquad
+ {C_\psi}=\sqrt{2{A_\psi}/\sigma_\psi}.
+\end{equation}
+Valid values are
+\begin{equation}\label{ch6:eq:constants}
+ \begin{array}{c|ccc}
+ &\sigma_\psi&{A_\psi}&{C_\psi}\\\hline
+ \text{quadratic}&1&1/8&1/2\\
+ \text{binary entropy}&4&\log2&\sqrt{\log2/2}
+ \end{array}
+\end{equation}
+These constants follow from the scalar geometry bounds in
+Appendix~\ref{app:geometry}.
+Apply Lemma~\ref{app:lem:optimistic} with regularizer
+$\psi$, predictor $F=F_{s,I}$, and feedback $g=g_{s,I}$.
+Writing $\widehat g=F'_{s,I}(p)$ and dropping the nonpositive term
+$-D_\psi(p,z)/\eta$ gives, for every $p^*\in[0,1]$,
+\begin{equation}\label{ch6:eq:one-step}
+ g(p-p^*)\le
+ \frac{D_\psi(p^*,z)-D_\psi(p^*,z^+)}\eta
+ +\frac\eta{2\sigma_\psi}(g-\widehat g)^2.
+\end{equation}
+The lemma covers quadratic boundary solutions; with the entropy penalty, the reference values and chosen splits
+remain strictly between zero and one because feedback and predictor derivatives are finite.
+
+\begin{Thm:Lemma}[Regret bound across the learner copies at one node]\label{ch6:lem:local}
+Set $e_{s,I}=g_{s,I}-F'_{s,I}(p_{s,I})$. For any fixed $p^*\in[0,1]$,
+\begin{equation}\label{ch6:eq:local}
+ \sum_{s=1}^Ng_{s,I}(p_{s,I}-p^*)
+ \le\frac{d_I{D_\psi}(p^*,1/2)}{\eta_I}
+ +\frac{\eta_I}{2\sigma_\psi}\sum_{s=1}^Ne_{s,I}^2.
+\end{equation}
+If a known $B_I>0$ bounds $|e_{s,I}|$ uniformly, the step size
+\begin{equation}\label{ch6:eq:steps}
+ \eta_I=\sqrt{\frac{2\sigma_\psi{A_\psi} d_I}{NB_I^2}}
+\end{equation}
+gives
+\begin{equation}\label{ch6:eq:local-opt}
+ \sum_{s=1}^Ng_{s,I}(p_{s,I}-p^*)
+ \le{C_\psi} B_I\sqrt{d_IN}.
+\end{equation}
+\end{Thm:Lemma}
+\begin{proof}
+Fix $I$ and abbreviate $d=d_I$, $\eta=\eta_I$.  For
+$r\in[d]$, let
+\[
+\mathcal S_r=\{s\in[N]:s\equiv r\pmod d\}
+=\{s_{r,1}<\cdots<s_{r,n_r}\}.
+\]
+By \eqref{ch6:eq:timing},
+$z_{s_{r,k}+d,I}=z_{s_{r,k+1},I}$ whenever $k<n_r$.
+Summing \eqref{ch6:eq:one-step} along one nonempty copy therefore gives
+\begin{align*}
+\sum_{k=1}^{n_r}g_{s_{r,k},I}(p_{s_{r,k},I}-p^*)
+&\le\frac{1}{\eta}
+ \sum_{k=1}^{n_r}\left[
+ D_\psi(p^*,z_{s_{r,k},I})
+ -D_\psi(p^*,z_{s_{r,k}+d,I})\right]\\
+&\quad+\frac{\eta}{2\sigma_\psi}
+ \sum_{k=1}^{n_r}e_{s_{r,k},I}^2\\
+&=\frac{D_\psi(p^*,1/2)
+ -D_\psi(p^*,z_{s_{r,n_r}+d,I})}{\eta}
+ +\frac{\eta}{2\sigma_\psi}
+ \sum_{k=1}^{n_r}e_{s_{r,k},I}^2\\
+&\le\frac{D_\psi(p^*,1/2)}{\eta}
+ +\frac{\eta}{2\sigma_\psi}
+ \sum_{k=1}^{n_r}e_{s_{r,k},I}^2.
+\end{align*}
+Summing over the at most $d$ nonempty residue classes gives
+\eqref{ch6:eq:local}.
+If $|e_{s,I}|\le B_I$, the step size \eqref{ch6:eq:steps} gives
+\begin{align*}
+\frac{d_IA_\psi}{\eta_I}
++\frac{\eta_I}{2\sigma_\psi}\sum_{s=1}^{N}e_{s,I}^2
+&\le\frac{d_IA_\psi}{\eta_I}
++\frac{\eta_INB_I^2}{2\sigma_\psi}\\
+&=2B_I\sqrt{\frac{A_\psi d_IN}{2\sigma_\psi}}\\
+&=C_\psi B_I\sqrt{d_IN}.\qedhere
+\end{align*}
+\end{proof}
+For any fixed step size, the regret bound depends on the prediction errors
+that actually occur. These errors need not be known in advance. To choose
+the step size before running the controller, we can use a known upper
+bound $B_I$ on their magnitude, as in \eqref{ch6:eq:steps}.
+
+\subsection{Joint convexity and the tree identity}
+\begin{Thm:Lemma}[Linearized regret bound along the realized trajectory]\label{ch6:lem:joint}
+For every $\mathbf m\in\Delta_K$,
+\begin{equation}\label{ch6:eq:joint-compare}
+ J_T^{\mathrm{on}}-J_T(\mathbf m)
+ \le\sum_{s=1}^N\sum_{i=1}^KA_{s,i}(q_{s,i}-m_i).
+\end{equation}
+\end{Thm:Lemma}
+\begin{proof}
+Put $\delta_{s,i}=q_{s,i}-m_i$ and retain the convention
+$\zeta_r^x=\zeta_r^u=0$ for $r>T$.  The subgradient inequality at the
+realized state--action pair gives
+\[
+c_t(x_t,u_t)-c_t(x_t(\mathbf m),u_t(\mathbf m))
+\le\zeta_t^x(x_t-x_t(\mathbf m))
++\zeta_t^u(u_t-u_t(\mathbf m)).
+\]
+The action contribution rearranges as
+\begin{align*}
+\sum_{t=1}^{T}\zeta_t^u\bigl(u_t-u_t(\mathbf m)\bigr)
+&=\sum_{t=1}^{T}\sum_{i=1}^{K}
+  \zeta_t^uw_{t-i}\delta_{t-i,i}\\
+&=\sum_{s=1}^{N}\sum_{i=1}^{K}
+  w_s\zeta_{s+i}^u\delta_{s,i}.
+\end{align*}
+Similarly, the state contribution is
+\begin{align*}
+\sum_{t=1}^{T}\zeta_t^x\bigl(x_t-x_t(\mathbf m)\bigr)
+&=\sum_{t=1}^{T}\sum_{i=1}^{K}
+  \zeta_t^xw_{t-i}\sum_{j=i}^{K}\delta_{t-i,j}\\
+&=\sum_{s=1}^{N}w_s\sum_{i=1}^{K}
+  \zeta_{s+i}^x\sum_{j=i}^{K}\delta_{s,j}\\
+&=\sum_{s=1}^{N}\sum_{j=1}^{K}
+  w_s\left(\sum_{i=1}^{j}\zeta_{s+i}^x\right)\delta_{s,j}.
+\end{align*}
+Adding these contributions and using \eqref{ch6:eq:leaf} proves the bound.
+For fixed realized costs, each $(x_t,u_t)$ is affine in the final fractions;
+therefore $\sum_t c_t(x_t,u_t)$ is jointly convex in those fractions.
+\end{proof}
+
+We can describe a fixed policy using the same tree as the controller.
+At node $I$, $M_I$ is the fraction of each arrival assigned to the ages
+in that interval. When $M_I>0$, $p_I^*$ is the proportion of that
+fraction assigned to the earlier child:
+\begin{equation}\label{ch6:eq:comparator-mass}
+ M_I=\sum_{i\in I}m_i,\qquad
+ p_I^*=\frac{M_{I_{\mathrm{L}}}}{M_I}\quad(M_I>0).
+\end{equation}
+If $M_I=0$, the split can be chosen arbitrarily because the policy assigns
+no resource there.
+
+The next identity expresses the linearized cost difference for one
+arrival as a sum of comparisons at individual nodes. Each comparison is
+weighted by the fraction $M_I$ assigned there by the fixed policy.
+
+\begin{Thm:Lemma}[Tree identity]\label{ch6:lem:tree}
+For every arrival $s$,
+\begin{equation}\label{ch6:eq:tree-identity}
+ \sum_{i=1}^KA_{s,i}(q_{s,i}-m_i)
+ =\sum_{I\in\mathcal{I}_K}M_I(p_{s,I}-p_I^*)g_{s,I}.
+\end{equation}
+\end{Thm:Lemma}
+\begin{proof}
+If $M_I>0$, then $M_Ip_I^*=M_{I_{\mathrm{L}}}$ and
+$M_I(1-p_I^*)=M_{I_{\mathrm{R}}}$.  Hence
+\begin{align*}
+M_I(p_{s,I}-p_I^*)g_{s,I}
+&=(M_Ip_{s,I}-M_{I_{\mathrm{L}}})
+  (V_{s,I_{\mathrm{L}}}-V_{s,I_{\mathrm{R}}})\\
+&=M_I\!\left[p_{s,I}V_{s,I_{\mathrm{L}}}
+ +(1-p_{s,I})V_{s,I_{\mathrm{R}}}\right]
+  -M_{I_{\mathrm{L}}}V_{s,I_{\mathrm{L}}}-M_{I_{\mathrm{R}}}V_{s,I_{\mathrm{R}}}\\
+&=M_IV_{s,I}-M_{I_{\mathrm{L}}}V_{s,I_{\mathrm{L}}}-M_{I_{\mathrm{R}}}V_{s,I_{\mathrm{R}}}.
+\end{align*}
+If $M_I=0$, then $M_{I_{\mathrm{L}}}=M_{I_{\mathrm{R}}}=0$, so the same identity holds for
+any $p_I^*$.  Summing it over all internal nodes cancels every internal
+child term:
+\begin{align*}
+\sum_{I\in\mathcal I_K}M_I(p_{s,I}-p_I^*)g_{s,I}
+&=M_{\mathrm{root}}V_{s,\mathrm{root}}
+  -\sum_{i=1}^{K}M_{\{i\}}V_{s,\{i\}}\\
+&=V_{s,\mathrm{root}}-\sum_{i=1}^{K}m_iA_{s,i}.
+\end{align*}
+The routing recursion \eqref{ch6:eq:values} gives
+\[
+V_{s,\mathrm{root}}=\sum_{i=1}^{K}q_{s,i}V_{s,\{i\}}
+=\sum_{i=1}^{K}q_{s,i}A_{s,i}.
+\]
+\end{proof}
+
+\begin{Thm:Theorem}[General prediction-error bound]\label{ch6:thm:master}
+For any causal differentiable convex predictors and fixed positive step sizes,
+Algorithm~\ref{ch6:alg:controller} is deadline feasible and, for every $\mathbf m\in\Delta_K$,
+\begin{equation}\label{ch6:eq:master}
+ \boxed{J_T^{\mathrm{on}}-J_T(\mathbf m)\le
+ \sum_{I\in\mathcal{I}_K}M_I\left[
+ \frac{d_I{D_\psi}(p_I^*,1/2)}{\eta_I}
+ +\frac{\eta_I}{2\sigma_\psi}\sum_{s=1}^Ne_{s,I}^2\right].}
+\end{equation}
+With strictly positive error bounds $B_I$ and steps \eqref{ch6:eq:steps}, it also satisfies
+\begin{equation}\label{ch6:eq:path}
+ \Reg_T(\Delta_K)\le{C_\psi}\sqrt N
+ \max_{1\le i\le K}\sum_{\substack{I\in\mathcal{I}_K\\i\in I}}B_I\sqrt{d_I}.
+\end{equation}
+\end{Thm:Theorem}
+\begin{proof}
+Proposition~\ref{ch6:prop:state} gives deadline feasibility.  For any
+$\mathbf m\in\Delta_K$, Lemmas~\ref{ch6:lem:joint} and
+\ref{ch6:lem:tree} give
+\begin{align*}
+J_T^{\mathrm{on}}-J_T(\mathbf m)
+&\le\sum_{s=1}^{N}\sum_{I\in\mathcal I_K}
+ M_I(p_{s,I}-p_I^*)g_{s,I}\\
+&=\sum_{I\in\mathcal I_K}M_I
+ \sum_{s=1}^{N}g_{s,I}(p_{s,I}-p_I^*).
+\end{align*}
+Since $M_I\ge0$, Lemma~\ref{ch6:lem:local} gives \eqref{ch6:eq:master}.
+With \eqref{ch6:eq:steps} and $|e_{s,I}|\le B_I$,
+\begin{align*}
+J_T^{\mathrm{on}}-J_T(\mathbf m)
+&\le C_\psi\sqrt N\sum_{I\in\mathcal I_K}
+ M_IB_I\sqrt{d_I}\\
+&=C_\psi\sqrt N\sum_{i=1}^{K}m_i
+ \sum_{\substack{I\in\mathcal I_K\\i\in I}}B_I\sqrt{d_I}\\
+&\le C_\psi\sqrt N
+ \max_{1\le i\le K}\sum_{\substack{I\in\mathcal I_K\\i\in I}}
+ B_I\sqrt{d_I},
+\end{align*}
+because $\sum_i m_i=1$.  Apply the last display to a minimizer of
+$J_T$ over $\Delta_K$.
+\end{proof}
+
+\subsection{General upper bounds}
+Consider two service ages $i<j$ in an interval $I$ containing $d_I$ ages.
+Both marginal-cost coefficients include the storage terms for ages
+$1,\ldots,i$. These common terms cancel when we subtract $A_{s,i}$ from
+$A_{s,j}$, giving
+\begin{equation}\label{ch6:eq:leaf-difference}
+ A_{s,j}-A_{s,i}=w_s\left[
+ \zeta_{s+j}^u-\zeta_{s+i}^u+\sum_{k=i+1}^{j}\zeta_{s+k}^x\right].
+\end{equation}
+The remaining sum contains $j-i$ storage terms. Since $j-i\le d_I-1$,
+their total absolute contribution is at most $w_s(d_I-1)L_x$. The two
+service terms contribute at most $2w_sL_u$. Each child-subtree value is an
+average of the coefficients for its service ages, so the difference between
+the two child values satisfies the same bound. Therefore, for the basic
+controller ($F=0$),
+\begin{equation}\label{ch6:eq:general-node-bound}
+ |e_{s,I}|=|g_{s,I}|\le w_sG_I\le G_I,
+ \qquad G_I=2L_u+(d_I-1)L_x.
+\end{equation}
+
+Define
+\begin{equation}\label{ch6:eq:S}
+ \Lambda_1=0,\qquad
+ \Lambda_K=\sum_{j=0}^{\lceil\log_2K\rceil-1}
+ \sqrt{\lceil K/2^j\rceil}\quad(K\ge2).
+\end{equation}
+At depth $j$ every interval has length at most $\lceil K/2^j\rceil$.
+Consequently
+\begin{equation}\label{ch6:eq:S-bound}
+ \Lambda_K\le\sqrt{2K}\sum_{j\ge0}2^{-j/2}
+ =2(1+\sqrt2)\sqrt K.
+\end{equation}
+
+\begin{Thm:Theorem}[Adversarial jointly convex costs]\label{ch6:thm:general}
+Under \eqref{ch6:eq:support}--\eqref{ch6:eq:bounded-grad}, use $K=H_0$, $F=0$,
+and \eqref{ch6:eq:steps} with $B_I=G_I$. The controller satisfies
+\begin{align}
+ \Reg_T(\Delta_H)
+ &\le{C_\psi}\sqrt{T-1}
+ \max_{1\le i\le H_0}\sum_{I\ni i}
+ [2L_u+(d_I-1)L_x]\sqrt{d_I}\label{ch6:eq:general-path}\\
+ &\le{C_\psi}[2L_u+(H_0-1)L_x]\sqrt{T-1}\,\Lambda_{H_0}.
+ \label{ch6:eq:general-common}
+\end{align}
+In particular, for quadratic updates,
+\begin{equation}\label{ch6:eq:main-upper}
+ \boxed{\Reg_T(\Delta_H)\le
+ \frac{2L_u+(H_0-1)L_x}{2}\sqrt{T-1}\,\Lambda_{H_0}
+ =O\bigl(L_u\sqrt{H_0T}+L_xH_0^{3/2}\sqrt T\bigr).}
+\end{equation}
+\end{Thm:Theorem}
+\begin{proof}
+With $K=H_0$ and $N=T-1$, \eqref{ch6:eq:general-node-bound} gives
+\[
+B_I=G_I=2L_u+(d_I-1)L_x
+\le 2L_u+(H_0-1)L_x=:G_*.
+\]
+For every leaf $i$, there is at most one interval containing $i$ at each
+depth $j$, and its length is at most $\lceil H_0/2^j\rceil$.  Therefore
+\begin{align*}
+\sum_{\substack{I\in\mathcal I_{H_0}\\i\in I}}
+G_I\sqrt{d_I}
+&\le G_*\sum_{j=0}^{\lceil\log_2H_0\rceil-1}
+\sqrt{\lceil H_0/2^j\rceil}\\
+&=G_*\Lambda_{H_0}.
+\end{align*}
+Theorem~\ref{ch6:thm:master} and the equality
+$\Reg_T(\Delta_H)=\Reg_T(\Delta_{H_0})$ established in
+Section~\ref{ch6:subsec:terminal} give
+\eqref{ch6:eq:general-path}--\eqref{ch6:eq:general-common}.
+For quadratic updates, $C_\psi=1/2$; \eqref{ch6:eq:S-bound} then gives
+\eqref{ch6:eq:main-upper}.
+\end{proof}
+
+\begin{Thm:Corollary}[Consumption-only costs]\label{ch6:cor:action}
+If $L_x=0$, the quadratic controller satisfies
+\begin{equation}\label{ch6:eq:action-upper}
+ \Reg_T(\Delta_H)\le L_u\sqrt{T-1}\,\Lambda_{H_0}
+ \le2(1+\sqrt2)L_u\sqrt{H_0(T-1)}.
+\end{equation}
+\end{Thm:Corollary}
+\begin{proof}
+Set $L_x=0$ in \eqref{ch6:eq:general-common} and use
+\eqref{ch6:eq:S-bound}. State independence follows from the Lipschitz bound
+\eqref{ch6:eq:lipschitz} with $L_x=0$.
+\end{proof}
+
+For fixed $H,L_x,L_u$, the regret is $O(\sqrt T)$. With fixed positive
+bounds and a growing deadline, $H_0^3=o(T)$ is sufficient for the general
+upper bound to be sublinear, whereas $H_0=o(T)$ suffices when $L_x=0$.
+
+\section{Nonnegative State Marginal Costs and Choosing the Deadline}
+\label{ch6:sec:positive}
+This section adds a structural assumption on the joint costs $c_t$.
+Assume that at every time
+and every feasible pair the oracle can select a joint subgradient with
+\begin{equation}\label{ch6:eq:positive}
+ 0\le\lambda\le\zeta^x\le\lambda+V,\qquad |\zeta^u|\le L_u,
+ \qquad \lambda,V\ge0.
+\end{equation}
+The constant $\lambda$ is a lower bound on the marginal cost of holding
+additional resource. The quantity $V$ specifies how far above $\lambda$
+this marginal cost may rise. These same bounds apply at every round and
+every feasible stored and consumed amount. The bounds are known,
+although the cost functions themselves need not be known in advance.
+
+\subsection{A comparison inequality for coupled costs}
+\begin{Thm:Lemma}[Moving consumption earlier]\label{ch6:lem:earlier}
+Let two feasible pairs satisfy $\bar x\le x$. Under \eqref{ch6:eq:positive},
+\begin{equation}\label{ch6:eq:earlier}
+ c_t(\bar x,\bar u)-c_t(x,u)
+ \le-\lambda(x-\bar x)+L_u|\bar u-u|.
+\end{equation}
+\end{Thm:Lemma}
+\begin{proof}
+Use a bounded joint subgradient $(\bar\zeta^x,\bar\zeta^u)$ at
+$(\bar x,\bar u)$ in \eqref{ch6:eq:support}, tested against $(x,u)$:
+\begin{align*}
+c_t(\bar x,\bar u)-c_t(x,u)
+&\le\bar\zeta^x(\bar x-x)+\bar\zeta^u(\bar u-u)\\
+&\le\lambda(\bar x-x)+|\bar\zeta^u|\,|\bar u-u|\\
+&\le-\lambda(x-\bar x)+L_u|\bar u-u|,
+\end{align*}
+where the second line uses $\bar x-x\le0$ and
+$\bar\zeta^x\ge\lambda$.
+\end{proof}
+
+To justify a shorter deadline, compare service at an age $i>K$ with
+service at age one. If the age-$i$ service occurs by time $T$, moving one
+unit changes consumption in two rounds. Lemma~\ref{ch6:lem:earlier} bounds
+the contribution of these action changes to the cost increase by $2L_u$.
+The move also removes $i-1\ge K$ rounds of storage, whose contribution to
+the same bound is at most $-\lambda K$. This motivates choosing $K$ so
+that $\lambda K\ge2L_u$ whenever the deadline is shortened. The next lemma
+accounts separately for arrivals whose service extends beyond the cost
+horizon. Choose
+\begin{equation}\label{ch6:eq:K}
+ K=\begin{cases}
+ H_0,&\lambda=0,\\[1mm]
+ \displaystyle\min\left\{H_0,
+ \max\left\{1,\left\lceil\frac{2L_u}{\lambda}\right\rceil\right\}\right\},
+ &\lambda>0.
+ \end{cases}
+\end{equation}
+This choice also gives $\lambda(K-1)\le2L_u$, so the part of the local
+feedback bound \eqref{ch6:eq:positive-B} proportional to $\lambda$ is at
+most $2L_u$. When $K<H_0$, it satisfies
+$\lambda K\ge2L_u$ as required for the preceding cost comparison.
+For $K=1$ there are no split decisions to learn.
+
+\begin{Thm:Lemma}[Cost bound for shortening the comparator's allocation schedule]\label{ch6:lem:reduce}
+For any $\mathbf m\in\Delta_{H_0}$, move all its fractions at ages $i>K$ to age one,
+producing $\bar{\mathbf m}\in\Delta_K$. Then
+\begin{equation}\label{ch6:eq:reduce}
+ J_T(\bar{\mathbf m})-J_T(\mathbf m)\le L_uK\,\ind{K<H_0}.
+\end{equation}
+No modification is needed when $K=H_0$.
+\end{Thm:Lemma}
+\begin{proof}
+For $i>K$ and $s\le T-1$, put
+\[
+v_{s,i}=w_sm_i,\qquad h_s=T-s.
+\]
+Replacing age-$i$ service of this amount by age-one service changes the
+actions within the cost horizon only at $s+1$ and, when $s+i\le T$, at $s+i$.
+Its action and state contributions are therefore
+\begin{align*}
+\sum_{t=1}^{T}|\Delta u_t^{(s,i)}|
+&=v_{s,i}\bigl(1+\ind{i\le h_s}\bigr),\\
+\sum_{t=1}^{T}\bigl(x_t(\mathbf m)-x_t(\bar{\mathbf m})\bigr)^{(s,i)}
+&=v_{s,i}\sum_{r=2}^{\min\{i,h_s\}}1\\
+&=v_{s,i}\bigl(\min\{i,h_s\}-1\bigr).
+\end{align*}
+In particular, $x_t(\bar{\mathbf m})\le x_t(\mathbf m)$ for every $t$.
+State reductions add linearly, while the action changes satisfy
+\[
+\sum_{t=1}^{T}|u_t(\bar{\mathbf m})-u_t(\mathbf m)|
+\le\sum_{s=1}^{T-1}\sum_{i=K+1}^{H_0}
+v_{s,i}\bigl(1+\ind{i\le h_s}\bigr).
+\]
+After summing Lemma~\ref{ch6:lem:earlier} over $t$,
+\begin{align}
+J_T(\bar{\mathbf m})-J_T(\mathbf m)
+&\le\sum_{s=1}^{T-1}\sum_{i=K+1}^{H_0}v_{s,i}
+\left[
+L_u\bigl(1+\ind{i\le h_s}\bigr)
+-\lambda\bigl(\min\{i,h_s\}-1\bigr)
+\right].
+\label{ch6:eq:moved-net}
+\end{align}
+If $K=H_0$, the double sum is empty.  Otherwise,
+\eqref{ch6:eq:K} gives $\lambda K\ge2L_u$, so for $i>K$,
+\[
+L_u(1+\ind{i\le h_s})-\lambda(\min\{i,h_s\}-1)
+\le
+\begin{cases}
+2L_u-\lambda K\le0, & h_s\ge K+1,\\
+L_u-\lambda(h_s-1)\le L_u, & 1\le h_s\le K.
+\end{cases}
+\]
+Consequently,
+\begin{align*}
+J_T(\bar{\mathbf m})-J_T(\mathbf m)
+&\le L_u\sum_{\substack{1\le s\le T-1\\1\le T-s\le K}}
+\sum_{i=K+1}^{H_0}w_sm_i\\
+&\le L_u\sum_{s=T-K}^{T-1}1
+\le L_uK.
+\end{align*}
+\end{proof}
+
+For arrivals near the end of the cost horizon, moving service earlier can
+add a positive action term to the cost bound at or before $T$, while part
+of the compensating storage reduction occurs after $T$ and is excluded
+from the objective. When $K<H_0$, only arrivals $s=T-K,\ldots,T-1$ can
+contribute a positive excess in the preceding bound. Their total size is at
+most $K$, and each unit contributes at most $L_u$, giving the term $L_uK$ in
+\eqref{ch6:eq:reduce}. This comparison allows the controller to use deadline
+$K$ while its regret is still measured against fixed policies with deadline
+$H$. The comparison bound can be replaced by zero when $K=H_0$, or when
+every nonzero arrival's full original lifetime lies inside the cost horizon.
+
+\subsection{Regret bound for the chosen deadline}
+For the basic controller, \eqref{ch6:eq:leaf-difference} and
+\eqref{ch6:eq:positive} imply
+\begin{equation}\label{ch6:eq:positive-node}
+ |g_{s,I}|\le w_s[2L_u+(\lambda+V)(d_I-1)].
+\end{equation}
+A common bound is
+\begin{equation}\label{ch6:eq:positive-B}
+ B=2L_u+(\lambda+V)(K-1)\le4L_u+(K-1)V.
+\end{equation}
+
+\begin{Thm:Theorem}[Regret bound with the chosen deadline]\label{ch6:thm:positive}
+Assume \eqref{ch6:eq:positive}, use $K$ in \eqref{ch6:eq:K}, $F=0$, and steps
+\eqref{ch6:eq:steps} with the common bound \eqref{ch6:eq:positive-B}. Then
+\begin{equation}\label{ch6:eq:positive-upper}
+ \boxed{\Reg_T(\Delta_H)\le
+ {C_\psi}[2L_u+(\lambda+V)(K-1)]\sqrt{T-1}\,\Lambda_K
+ +L_uK\,\ind{K<H_0}.}
+\end{equation}
+In particular,
+\begin{equation}\label{ch6:eq:positive-rate}
+ \Reg_T(\Delta_H)=O\bigl((L_u+KV)\sqrt{KT}+L_uK\bigr).
+\end{equation}
+\end{Thm:Theorem}
+\begin{proof}
+Let $\mathbf m^*$ minimize $J_T$ over $\Delta_{H_0}$, and let
+$\bar{\mathbf m}^*\in\Delta_K$ be its reduction from
+Lemma~\ref{ch6:lem:reduce}.  With $B$ from \eqref{ch6:eq:positive-B},
+\eqref{ch6:eq:positive-node} gives $|g_{s,I}|\le B$ at every node.
+Theorem~\ref{ch6:thm:master} and the same depth calculation as in
+Theorem~\ref{ch6:thm:general} give
+\[
+J_T^{\mathrm{on}}-J_T(\bar{\mathbf m}^*)
+\le C_\psi B\sqrt{T-1}\,\Lambda_K.
+\]
+Therefore
+\begin{align*}
+\Reg_T(\Delta_H)
+&=J_T^{\mathrm{on}}-J_T(\mathbf m^*)\\
+&=J_T^{\mathrm{on}}-J_T(\bar{\mathbf m}^*)
+  +J_T(\bar{\mathbf m}^*)-J_T(\mathbf m^*)\\
+&\le C_\psi[2L_u+(\lambda+V)(K-1)]
+  \sqrt{T-1}\,\Lambda_K
+  +L_uK\ind{K<H_0}.
+\end{align*}
+Equations \eqref{ch6:eq:S-bound} and \eqref{ch6:eq:positive-B} give
+\eqref{ch6:eq:positive-rate}.
+Using the node-dependent bounds in \eqref{ch6:eq:positive-node} directly
+in \eqref{ch6:eq:path} gives the sharper path expression.
+\end{proof}
+
+\begin{Thm:Corollary}[Constant nonnegative state marginal]\label{ch6:cor:constant}
+If the oracle selects $\zeta^x=\lambda\ge0$ at every time and feasible pair,
+then the quadratic controller satisfies
+\begin{equation}\label{ch6:eq:constant}
+ \Reg_T(\Delta_H)\le2L_u\sqrt{T-1}\,\Lambda_K
+ +L_uK\,\ind{K<H_0}
+ =O(L_u\sqrt{KT}+L_uK).
+\end{equation}
+The implied constant is independent of $\lambda$, and this is at most
+$O(L_u\sqrt{H_0T})$.
+\end{Thm:Corollary}
+\begin{proof}
+With $V=0$, $C_\psi=1/2$, and \eqref{ch6:eq:K},
+\[
+C_\psi[2L_u+\lambda(K-1)]
+\le\frac12(2L_u+2L_u)=2L_u.
+\]
+Apply Theorem~\ref{ch6:thm:positive}, \eqref{ch6:eq:S-bound}, and
+$K\le\sqrt{KT}\le\sqrt{H_0T}$.
+\end{proof}
+
+When $\lambda>0$ and $L_u$ are fixed, the deadline $K$ is bounded
+independently of $H$. For example, $\lambda=L_u=1$ gives
+$K=\min\{H_0,2\}$. When only $\zeta^x\ge0$ is known and no positive lower
+bound is available, \eqref{ch6:eq:K} gives $K=H_0$: long zero-cost holding
+periods cannot be excluded by this argument.
+Section~\ref{ch6:subsec:spikes} shows why nonnegativity alone does not give a
+bound independent of the magnitude of adversarial state marginals.
+
+\section{Causal Prediction and Known State Costs}
+\label{ch6:sec:prediction}
+Forecasts of future costs can help the controller decide how much resource
+to consume in the earlier interval and how much to leave for the later
+interval. A forecast may use previously revealed costs, side information,
+or a known part of the cost function. It must be available when the split
+is chosen. Setting the prediction term $F$ to zero gives the basic
+controller.
+
+\subsection{A hypothetical trajectory used for prediction}
+To use a forecast when choosing a split, we first give it a simple
+hypothetical consumption schedule. Part of the arrival is consumed at the
+start of the earlier interval, and the rest at the start of the later
+interval. Varying that fraction gives a predicted cost for each candidate
+split. The actual consumption times are still determined by later decisions
+in the tree.
+
+Fix $I=[a,b]$, let $r=r_I$ be its right-child starting age, and consider
+arrival $s$. At the end of $s+a-1$, choose a known background storage level
+$B_{s,I}^{\mathrm{bg}}\in[0,K-w_s]$; zero is always allowed.
+A hypothetical allocation of size $w_s$ serves fraction $p$ at age
+$a$ and fraction $1-p$ at age $r$. In the hypothetical states, actions,
+and forecast gradients below, we suppress the fixed indices $(s,I)$;
+age $k$ corresponds to physical round $s+k$. For $k=a,\ldots,r$, define
+\begin{align}
+ \widehat x_k(p)&=B_{s,I}^{\mathrm{bg}}
+ +w_s\bigl[p\ind{k=a}+(1-p)\bigr],\label{ch6:eq:virtual-x}\\
+ \widehat u_k(p)&=w_s\bigl[p\ind{k=a}
+ +(1-p)\ind{k=r}\bigr].\label{ch6:eq:virtual-u}
+\end{align}
+Every such pair is affine in $p$ and belongs to $\mathcal{D}_K$.
+The background is retained and receives no service in the hypothetical schedule during this
+interval. The size is the full $w_s$, even if the node receives less actual
+mass, consistently with the normalization of \eqref{ch6:eq:g}.
+
+For each $k=a,\ldots,r$ with $s+k\le T$, let
+$\widehat c_{s,I,k}(x,u)$ be a causal differentiable jointly convex forecast
+for $c_{s+k}$. Put
+\begin{equation}\label{ch6:eq:joint-predictor}
+ F_{s,I}(p)=
+ \sum_{k=a}^{\min\{r,T-s\}}
+ \widehat c_{s,I,k}(\widehat x_k(p),\widehat u_k(p)),
+\end{equation}
+with an empty sum equal to zero. Then \eqref{ch6:eq:play} retains these full
+nonlinear functions inside a one-dimensional convex optimization problem.
+
+To identify the predicted gradient, evaluate the forecast gradient
+$(\widehat\zeta_k^x,\widehat\zeta_k^u)$ at the hypothetical state--action pair for the chosen
+$p_{s,I}$. The chain rule gives
+\begin{equation}\label{ch6:eq:predicted-g}
+ \widehat g_{s,I}=w_s\left[
+ \ind{s+a\le T}\widehat\zeta_a^u
+ -\ind{s+r\le T}\widehat\zeta_r^u
+ -\sum_{k=a+1}^{\min\{r,T-s\}}\widehat\zeta_k^x
+ \right].
+\end{equation}
+Omitted forecast terms are zero. Equation~\eqref{ch6:eq:correct}, centered at
+the old reference, performs the eventual correction using the actual
+$g_{s,I}$.
+
+The forecast evaluates costs using a simplified consumption schedule and
+hypothetical storage levels. The actual controller may consume resource
+at different ages and reach different storage levels, so the resulting
+marginal comparisons can differ even when the forecast cost functions
+are exact. Thus $e_{s,I}=g_{s,I}-\widehat g_{s,I}$ includes both errors in
+the cost forecasts and differences caused by the hypothetical schedule.
+The regret bound in \eqref{ch6:eq:master} depends on the sum of these
+squared feedback errors.
+
+\subsection{Error bounds and worst-case guarantees}
+\begin{Thm:Proposition}[Forecasts with bounded gradients]\label{ch6:prop:forecast}
+If every forecast gradient obeys
+$|\widehat\zeta^x|\le L_x$ and $|\widehat\zeta^u|\le L_u$ on its hypothetical
+pairs, then
+\begin{equation}\label{ch6:eq:forecast-general}
+ |e_{s,I}|\le2w_s[2L_u+(d_I-1)L_x].
+\end{equation}
+Thus steps based on twice the basic feedback bound preserve the general
+regret order of Theorem~\ref{ch6:thm:general}.
+If instead actual subgradients and forecast gradients both satisfy the bounds in
+\eqref{ch6:eq:positive}, then
+\begin{equation}\label{ch6:eq:forecast-positive}
+ |e_{s,I}|\le w_s[4L_u+(\lambda+V)(d_I-1)].
+\end{equation}
+Together with \eqref{ch6:eq:K}, this preserves the rate
+$O((L_u+KV)\sqrt{KT}+L_uK)$ in Theorem~\ref{ch6:thm:positive}.
+\end{Thm:Proposition}
+\begin{proof}
+Write $g_{s,I}=g_{s,I}^u+g_{s,I}^x$ and
+$\widehat g_{s,I}=\widehat g_{s,I}^u+\widehat g_{s,I}^x$ for the
+action- and state-marginal terms.  Equation~\eqref{ch6:eq:predicted-g}
+contains at most two action terms and at most $d_I-1$ state terms, so
+\[
+|\widehat g_{s,I}|
+\le w_s\bigl[2L_u+(d_I-1)L_x\bigr].
+\]
+Together with \eqref{ch6:eq:general-node-bound},
+\begin{align*}
+|e_{s,I}|
+&=|g_{s,I}-\widehat g_{s,I}|\\
+&\le|g_{s,I}|+|\widehat g_{s,I}|\\
+&\le2w_s\bigl[2L_u+(d_I-1)L_x\bigr].
+\end{align*}
+
+Under \eqref{ch6:eq:positive}, the subtree values are weighted
+averages of leaf values. For fixed $(s,I)$, let $\pi_i^{\mathrm{L}}$ and
+$\pi_i^{\mathrm{R}}$ be the controller's final conditional leaf fractions
+in the left and right children, respectively, with their dependence on
+$(s,I)$ suppressed. These probability weights give
+\[
+g_{s,I}
+=\sum_{i\in I_{\mathrm{L}}}\sum_{j\in I_{\mathrm{R}}}\pi_i^{\mathrm{L}}\pi_j^{\mathrm{R}}(A_{s,i}-A_{s,j}).
+\]
+For every $i\in I_{\mathrm{L}}$ and $j\in I_{\mathrm{R}}$,
+\begin{align*}
+A_{s,i}-A_{s,j}
+&=w_s\left[
+\zeta_{s+i}^u-\zeta_{s+j}^u
+-\sum_{k=i+1}^{j}\zeta_{s+k}^x\right],\\
+\left|w_s(\zeta_{s+i}^u-\zeta_{s+j}^u)\right|
+&\le2L_uw_s,\\
+-w_s(\lambda+V)(d_I-1)
+&\le-w_s\sum_{k=i+1}^{j}\zeta_{s+k}^x\le0.
+\end{align*}
+Averaging and applying \eqref{ch6:eq:predicted-g} to the forecast gives
+\[
+|g_{s,I}^u|,|\widehat g_{s,I}^u|\le2L_uw_s,
+\qquad
+g_{s,I}^x,\widehat g_{s,I}^x
+\in[-w_s(\lambda+V)(d_I-1),0].
+\]
+Hence
+\begin{align*}
+|e_{s,I}|
+&\le|g_{s,I}^u-\widehat g_{s,I}^u|
+  +|g_{s,I}^x-\widehat g_{s,I}^x|\\
+&\le w_s\bigl[4L_u+(\lambda+V)(d_I-1)\bigr].
+\end{align*}
+Finally,
+\[
+4L_u+(\lambda+V)(K-1)
+\le6L_u+(K-1)V
+\]
+by $\lambda(K-1)\le2L_u$.  Theorem~\ref{ch6:thm:master},
+\eqref{ch6:eq:S-bound}, and Lemma~\ref{ch6:lem:reduce} therefore give
+$O((L_u+KV)\sqrt{KT}+L_uK)$.
+\end{proof}
+
+At each node, the error contribution in \eqref{ch6:eq:master} is proportional
+to $\sum_s(g_{s,I}-\widehat g_{s,I})^2$. Accurate predictions of the marginal
+feedback can make this contribution small. Uniform gradient bounds alone
+do not ensure that improvement: they allow the actual and predicted
+marginals to differ by twice the basic feedback bound, which explains the
+larger general worst-case constant in Proposition~\ref{ch6:prop:forecast}.
+
+These forecast bounds assume differentiable forecast functions and exact
+solutions of the split-selection and reference-update minimizations. The observed costs themselves may be
+nonsmooth.
+
+\subsection{A fixed known state-cost component}
+\begin{Thm:Corollary}[Known state cost]\label{ch6:cor:known-state}
+Suppose the joint cost has the structured form
+\begin{equation}\label{ch6:eq:known-state-cost}
+ c_t(x,u)=\ell_t(u)+f(x),
+\end{equation}
+where each $\ell_t$ is adversarial and convex with available subgradients
+bounded by $L_u>0$ on $[0,H]$, while $f$ is convex, differentiable, fixed,
+and known before the first decision. Assume
+$0\le\lambda\le f'(x)\le\lambda+V$ on $[0,H]$ and choose $K$ by
+\eqref{ch6:eq:K}. Then the basic controller satisfies
+Theorem~\ref{ch6:thm:positive} with the same constants.
+
+When the storage cost $f$ is known, we can evaluate it directly when
+choosing the split. In the hypothetical schedule, consuming fraction $p$
+at age $a$ leaves $w_s(1-p)$ from this arrival in storage until age $r_I$.
+Use the causal joint forecasts $\widehat c_{s,I,k}(x,u)=f(x)$ in
+\eqref{ch6:eq:joint-predictor}, the hypothetical states \eqref{ch6:eq:virtual-x}, and set
+\[
+ \gamma_{s,I}=\max\{0,\min\{r_I,T-s\}-a\}.
+\]
+The quantity $\gamma_{s,I}$ counts the subsequent rounds through age
+$r_I$ that fall within the cost horizon. It therefore determines how
+many times the storage cost of this remaining amount enters the
+prediction step.
+After dropping a term independent of $p$, the prediction step becomes
+\begin{equation}\label{ch6:eq:known-state-prox}
+ \boxed{p_{s,I}=\argmin_{p\in[0,1]}
+ \left\{{D_\psi}(p,z_{s,I})+
+ \eta_I\gamma_{s,I}
+ f\bigl(B_{s,I}^{\mathrm{bg}}+w_s(1-p)\bigr)\right\}.}
+\end{equation}
+Keep the reference correction \eqref{ch6:eq:correct} unchanged and use the
+step sizes \eqref{ch6:eq:steps} with the bound \eqref{ch6:eq:positive-B}.
+For either regularizer, this controller satisfies
+\eqref{ch6:eq:positive-upper}. The prediction-error bound
+\eqref{ch6:eq:master} also applies.
+In particular, $f(x)=\lambda x+b$ with $\lambda\ge0$ recovers
+Corollary~\ref{ch6:cor:constant} for the quadratic controller, including its
+constant independent of $\lambda$.
+\end{Thm:Corollary}
+\begin{proof}
+The joint subgradient $(f'(x_t),\zeta_t^u)$, with
+$\zeta_t^u\in\partial\ell_t(u_t)$ and $|\zeta_t^u|\le L_u$, satisfies
+\eqref{ch6:eq:positive}.  The basic-controller claim follows from
+Theorem~\ref{ch6:thm:positive}.
+
+For the forecast $\widehat c_{s,I,k}(x,u)=f(x)$,
+\eqref{ch6:eq:virtual-x} gives
+\[
+\widehat x_a(p)=B_{s,I}^{\mathrm{bg}}+w_s,
+\qquad
+\widehat x_k(p)=B_{s,I}^{\mathrm{bg}}+w_s(1-p)
+\quad(a<k\le r_I).
+\]
+Consequently,
+\begin{align*}
+F_{s,I}(p)
+&=\ind{s+a\le T}f(B_{s,I}^{\mathrm{bg}}+w_s)\\
+&\quad+\gamma_{s,I}
+ f(B_{s,I}^{\mathrm{bg}}+w_s(1-p)).
+\end{align*}
+The first term is independent of $p$, and substitution in
+\eqref{ch6:eq:play} gives \eqref{ch6:eq:known-state-prox}.
+
+Here $\widehat g_{s,I}^u=0$, so the component bounds in the proof of
+Proposition~\ref{ch6:prop:forecast} give
+\begin{align*}
+|e_{s,I}|
+&\le|g_{s,I}^u|
+  +|g_{s,I}^x-\widehat g_{s,I}^x|\\
+&\le w_s[2L_u+(\lambda+V)(d_I-1)].
+\end{align*}
+Theorem~\ref{ch6:thm:master} and Lemma~\ref{ch6:lem:reduce} then give
+\eqref{ch6:eq:positive-upper}.
+For $f(x)=\lambda x+b$, take $V=0$ and apply the quadratic specialization
+in Corollary~\ref{ch6:cor:constant}.
+\end{proof}
+
+If a known convex
+$f$ is not nondecreasing, \eqref{ch6:eq:known-state-cost} still falls under
+Theorem~\ref{ch6:thm:general} whenever $|f'|\le L_x$, and the same
+predictor is covered by Proposition~\ref{ch6:prop:forecast} with $K=H_0$.
+The refinement that can shorten the deadline then need not apply.
+
+\section{Implementation and the Deadline Dependence}
+\label{ch6:sec:implementation}
+At a node of length $d_I$, store its $d_I$ reference values and the outstanding
+splits and child values needed to complete feedback. Each node starts at
+most one new decision for an arrival per round, and its feedback is complete
+within $d_I$ rounds. It therefore needs at most $d_I$ unfinished feedback
+records. Each record stores a constant number of split, routing, and
+child-value entries, so the node uses $O(d_I)$ memory in total. Resource
+reserved for a later interval remains stored until that interval begins.
+Since intervals at a fixed depth are disjoint and have total length at most $K$,
+\begin{equation}\label{ch6:eq:memory}
+ \sum_{I\in\mathcal{I}_K}d_I=O(K\log(2K)).
+\end{equation}
+Summing over the tree gives $O(K\log(2K))$ memory. Completed records can
+be discarded, so this requirement does not grow with $T$.
+
+Compute the leaf values using a scalar prefix sum
+$P_t=\sum_{\tau=1}^t\zeta_\tau^x$ and its stored values at active arrival times:
+\[
+ A_{s,i}=w_s(\zeta_{s+i}^u+P_{s+i}-P_s).
+\]
+Each node has at most one new split decision for an arrival and one completed feedback value per
+physical round. A direct implementation uses $O(K\log(2K))$ arithmetic per
+round. This bound excludes evaluating or solving arbitrary forecast problems;
+\eqref{ch6:eq:joint-predictor} may require several predicted cost evaluations.
+
+Both regularizers use the same state, routing, feedback timing, and tree
+identity. Quadratic updates are additive in a fraction; entropic updates are
+additive in its log odds. They generally produce different trajectories.
+Nonlinear prediction is available with either regularizer.
+
+The deadline affects this controller's regret bound in two ways. First,
+the root must wait $K$ rounds for complete feedback and therefore uses
+$K$ separate learner copies. Combining their regret bounds introduces a
+factor of $\sqrt K$. Second, changing the consumption age can change as
+many as $K-1$ storage-cost terms, so the feedback magnitude grows as
+$O(L_u+KL_x)$. The shorter intervals farther down the tree add only a
+constant factor. Together, these effects give the bound
+\[
+ O\bigl((L_u+KL_x)\sqrt{KT}\bigr)
+ =O\bigl(L_u\sqrt{KT}+L_xK^{3/2}\sqrt T\bigr).
+\]
+With $K=H_0$, these are the service and storage contributions in
+\eqref{ch6:eq:main-upper}.
+The following lower bound matches the state contribution.
+
+\section{Lower Bounds and Minimax Implications}
+\label{ch6:sec:lower}
+All lower bounds below use oblivious instances: arrivals and cost functions
+are fixed before the first decision and are independent of the controller's internal
+randomization. Random signs are used only to construct a distribution over
+such fixed instances. The expectation in the final statements for fixed
+input sequences is over the controller alone.
+
+Appendix~\ref{app:signs} supplies the independent-sign moment bound
+and the averaging argument used below. In particular,
+$\E[|S_n|]\ge\sqrt{n/3}$ gives the constants used here.
+
+\subsection{The action-marginal lower bound}
+\begin{Thm:Theorem}[Consumption-only lower bound]\label{ch6:thm:lower-action}
+For $T\ge2$, $H\ge2$, and $L_u>0$, every causal deadline-feasible controller
+has a deterministic oblivious instance with consumption-only jointly affine
+costs such that
+\begin{equation}\label{ch6:eq:lower-action}
+ \E[\Reg_T(\Delta_H)]\ge\frac{L_u}{2\sqrt3}\sqrt{T-1}.
+\end{equation}
+\end{Thm:Theorem}
+\begin{proof}
+Set $w_s=1$ for odd $s$ and $w_s=0$ for even $s$. Draw independent signs
+$\xi_2,\ldots,\xi_T$ and set
+$c_1(x,u)=0$, $c_t(x,u)=L_u\xi_tu$ for $t\ge2$.
+Let $\mathcal F_{t-1}^{\mathcal A}$ contain the controller's random seed
+and all observations available before its round-$t$ action.  Then
+$u_t$ is $\mathcal F_{t-1}^{\mathcal A}$-measurable and the fresh
+obliviously sampled sign satisfies
+$\E[\xi_t\mid\mathcal F_{t-1}^{\mathcal A}]=0$.  Hence
+\[
+\E[\xi_tu_t\mid\mathcal F_{t-1}^{\mathcal A}]
+=u_t\E[\xi_t\mid\mathcal F_{t-1}^{\mathcal A}]=0,
+\qquad
+\E[J_T^{\mathrm{on}}]=L_u\sum_{t=2}^{T}\E[\xi_tu_t]=0.
+\]
+For the policies $\mathbf e_1,\mathbf e_2$, put
+\[
+C_1=L_u\sum_{t=2}^{T}\xi_tw_{t-1},
+\qquad
+C_2=L_u\sum_{t=2}^{T}\xi_tw_{t-2}.
+\]
+Then $\E[C_1]=\E[C_2]=0$ and
+\[
+w_{t-1}-w_{t-2}=(-1)^t\in\{-1,1\},
+\qquad
+C_1-C_2=L_u\sum_{t=2}^{T}(-1)^t\xi_t
+\stackrel{\mathrm{d}}{=}L_uS_{T-1}.
+\]
+Using $\min\{a,b\}=(a+b-|a-b|)/2$,
+\[
+\E[\min\{C_1,C_2\}]
+=-\frac12\E[|C_1-C_2|]
+=-\frac{L_u}{2}\E[|S_{T-1}|].
+\]
+Since $\min_{\mathbf m\in\Delta_H}J_T(\mathbf m)\le\min\{C_1,C_2\}$,
+\begin{align*}
+\E[\Reg_T(\Delta_H)]
+&\ge \E[J_T^{\mathrm{on}}]-\E[\min\{C_1,C_2\}]\\
+&=\frac{L_u}{2}\E[|S_{T-1}|]\\
+&\ge\frac{L_u}{2\sqrt3}\sqrt{T-1},
+\end{align*}
+by Lemma~\ref{ch6:lem:signs}.  Averaging over the finite sign family fixes
+a deterministic sign sequence with at least this expected regret for the
+given randomized controller.
+\end{proof}
+
+\subsection{A matching state-marginal lower bound}
+\begin{Thm:Theorem}[Lower bound for linear storage costs with coefficients of either sign]\label{ch6:thm:lower-state}
+For $H\ge3$, $T\ge4$, and $L_x>0$, every causal deadline-feasible controller
+has a deterministic oblivious instance with costs $c_t(x,u)=a_tx$,
+$|a_t|\le L_x$, such that
+\begin{equation}\label{ch6:eq:lower-state}
+ \boxed{\E[\Reg_T(\Delta_H)]\ge
+ \frac{L_x}{256\sqrt3}\,\min\{H,T\}^{3/2}\sqrt T.}
+\end{equation}
+The state-marginal term in Theorem~\ref{ch6:thm:general} is therefore sharp up
+to universal constants in this range.
+\end{Thm:Theorem}
+\begin{proof}
+Let
+\begin{equation}\label{ch6:eq:block-parameters}
+ b=\min\{\lfloor H/3\rfloor,\lfloor T/4\rfloor\},\qquad
+ n=\lfloor T/(4b)\rfloor.
+\end{equation}
+We have $b,n\ge1$ and $4bn\le T$.  Use $n$ consecutive blocks of $4b$ rounds, with zero
+costs and arrivals in any remaining rounds. In block $j$, draw a fresh
+independent symmetric sign $\varepsilon_j$. At local time $r$ within the
+block, specify the arrivals and coefficients in Table~\ref{tab:deadline-block-phases};
+empty rows are omitted.
+\begin{table}[tbp]
+\centering
+\caption{Local rounds in the deadline-allocation lower-bound construction.}
+\label{tab:deadline-block-phases}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Local rounds $r$ & Arrival $w_t$ & Coefficient $a_t$ in $c_t(x,u)=a_tx$\\
+\midrule
+$1,\ldots,b$ & $1$ & $0$\\
+$b+1$ & $0$ & $0$\\
+$b+2,\ldots,2b+1$ & $0$ & $L_x/2$\\
+$2b+2,\ldots,3b+1$ & $0$ & $-L_x(1+\varepsilon_j)/2$\\
+$3b+2,\ldots,4b$ & $0$ & $0$\\
+\bottomrule
+\end{tabular}
+\end{table}
+The coefficient in the random phase is either $0$ throughout or $-L_x$
+throughout. All signs can be sampled before the interaction.
+
+Let $Y_j$ be the controller's state at the beginning of the first random-phase
+round. It is determined before $\varepsilon_j$ is first revealed.
+There are no arrivals throughout the positive-cost phase or the random
+phase, so the state is nonincreasing there. Every positive-cost state is
+at least $Y_j$, and every random-phase state is at most $Y_j$.
+This remains true if resource from earlier blocks is still present.
+Therefore the block's online cost satisfies the pathwise bound
+\begin{align}
+ C_j^{\mathrm{on}}
+ &\ge\frac{L_x}{2}bY_j
+ -\frac{L_x}{2}(1+\varepsilon_j)bY_j\nonumber\\
+ &=-\frac{L_x}{2}b\varepsilon_jY_j.
+ \label{ch6:eq:block-online}
+\end{align}
+Let $\mathcal F_j$ be the history, including the controller's random seed,
+immediately before block $j$'s random phase.  Then $Y_j$ is
+$\mathcal F_j$-measurable and
+$\E[\varepsilon_j\mid\mathcal F_j]=0$.  Thus
+\[
+\E[C_j^{\mathrm{on}}\mid\mathcal F_j]
+\ge-\frac{L_x}{2}bY_j\E[\varepsilon_j\mid\mathcal F_j]=0,
+\qquad
+\E[J_T^{\mathrm{on}}]=\sum_{j=1}^{n}\E[C_j^{\mathrm{on}}]\ge0.
+\]
+In particular, learning the sign during that phase cannot invalidate the
+pathwise lower bound.
+
+Consider the fixed comparators $\mathbf e_1$ and $\mathbf e_{3b}$. Both belong to $\Delta_H$.
+The immediate policy has consumed every new arrival by local round $b+1$,
+and has zero block cost. The delayed policy holds all $b$ new units at the
+beginning of every positive and random cost round: its first service occurs
+at $3b+1$, after that round's state cost. Its last service occurs at $4b$,
+so it carries nothing into the next block. Its block cost is exactly
+\begin{align}
+C_j(\mathbf e_{3b})
+&=\frac{L_x}{2}\,b\cdot b
+-\frac{L_x}{2}(1+\varepsilon_j)b\cdot b\nonumber\\
+&=-\frac{L_x}{2}b^2\varepsilon_j.
+\label{ch6:eq:block-comparator}
+\end{align}
+Consequently, with $S_n=\sum_j\varepsilon_j$,
+\begin{align}
+ \E[\Reg_T(\Delta_H)]
+ &\ge \E[J_T^{\mathrm{on}}]
+ -\E\left[\min\!\left\{0,-\frac{L_xb^2}{2}S_n\right\}\right]\nonumber\\
+ &\ge-\E\left[\min\!\left\{0,-\frac{L_xb^2}{2}S_n\right\}\right]\nonumber\\
+ &=\frac{L_xb^2}{4}\E[|S_n|]
+ \ge\frac{L_xb^2}{4\sqrt3}\sqrt n.
+ \label{ch6:eq:block-lower}
+\end{align}
+Recall $H_0=\min\{H,T\}$. Since $H/3\ge1$ and $T/4\ge1$,
+$\lfloor H/3\rfloor\ge H/8$ and
+$\lfloor T/4\rfloor\ge T/8$, so
+\[
+b\ge\frac{H_0}{8}.
+\]
+Also, $\lfloor q\rfloor\ge q/2$ for $q\ge1$ gives
+\[
+n=\left\lfloor\frac{T}{4b}\right\rfloor
+\ge\frac{T}{8b}.
+\]
+Thus
+\begin{align*}
+\frac{L_xb^2}{4\sqrt3}\sqrt n
+&\ge\frac{L_x}{8\sqrt6}b^{3/2}\sqrt T\\
+&\ge\frac{L_x}{256\sqrt3}H_0^{3/2}\sqrt T.
+\end{align*}
+Averaging over the finite sign family fixes a deterministic oblivious
+instance with the same expected-regret lower bound for the given controller.
+\end{proof}
+
+\begin{Thm:Remark}[Small deadlines and the sign of the marginal]
+The restriction $H\ge3$ is only for the block construction.
+For $H=2$, $T\ge4$, let $w_t=1$ and use independent coefficients
+$a_t=L_x\xi_t$ for $t\ge3$, with earlier costs zero.
+Every controller again has zero expected cost, while the states of
+$\mathbf e_1,\mathbf e_2$ differ by one at each such time. Their comparison gives
+$L_x\sqrt{T-2}/(2\sqrt3)$, which is the same order as
+$L_x\min\{H,T\}^{3/2}\sqrt T$ for $H=2$.
+For $T=2$, all states within the cost horizon are predetermined, so no positive
+state-only regret lower bound is asserted. For $H=1$ regret is zero.
+The matching state lower bound allows increasing storage to either raise
+or lower the current cost. The construction uses negative storage slopes
+during some rounds. Its costs can nevertheless be made nonnegative by
+adding constants that do not depend on the controller's decisions.
+These constants leave regret and the storage slopes unchanged.
+\end{Thm:Remark}
+
+\subsection{Why nonnegative state marginal costs still need a magnitude bound}
+\label{ch6:subsec:spikes}
+Nonnegative state marginals can still produce unpredictable storage
+charges. The next construction shows that, when service also has a cost,
+no regret bound that is uniformly sublinear in $T$ over this class can be
+independent of the largest allowed state marginal.
+
+\begin{Thm:Proposition}[Unpredictable nonnegative spikes]\label{ch6:prop:spikes}
+For every integer $n\ge2$ and $L_u>0$, there is a distribution of oblivious
+instances with $H=2$, $T=3n$, nonnegative jointly affine costs, and
+$0\le\zeta^x\le nL_u$, $0\le\zeta^u\le L_u$, such that every causal
+controller has expected regret at least
+\begin{equation}\label{ch6:eq:spikes}
+ nL_u(1-1/n)^n\ge nL_u/4.
+\end{equation}
+A deterministic instance with at least this expected regret therefore exists
+for every randomized controller.
+\end{Thm:Proposition}
+\begin{proof}
+Use $n$ independent three-round cycles. One unit arrives in the first round;
+there are no other arrivals in the cycle. Set the first cost to zero, the
+second to $c_t(x,u)=L_uu$, and the third to $c_t(x,u)=A_jx$, where
+$A_j=nL_u$ with probability $1/n$ and $A_j=0$ otherwise.
+These coefficients are sampled in advance and only revealed at their rounds.
+The deadline forces all cycle resource to be consumed in its second and
+third rounds, and all earlier resource is already gone.
+If the controller serves fraction $p_j$ in the second round, its cycle cost
+is $C_j^{\mathrm{on}}=L_up_j+A_j(1-p_j)$.
+Since $p_j$ is measurable before $A_j$ is revealed and
+$\E[A_j]=(1/n)nL_u=L_u$,
+\begin{align*}
+\E[C_j^{\mathrm{on}}\mid p_j]
+&=L_up_j+\E[A_j\mid p_j](1-p_j)=L_u,\\
+\E[J_T^{\mathrm{on}}]&=\sum_{j=1}^{n}\E[C_j^{\mathrm{on}}]=nL_u.
+\end{align*}
+For a fixed comparator $(p,1-p)^\top\in\Delta_2$,
+\[
+J_T(p)=pnL_u+(1-p)\sum_{j=1}^{n}A_j.
+\]
+Thus
+\[
+\min_{p\in[0,1]}J_T(p)
+=\min\left\{nL_u,\sum_{j=1}^{n}A_j\right\}
+=nL_u\ind{\max_jA_j>0}.
+\]
+Therefore
+\begin{align*}
+\E[\Reg_T(\Delta_2)]
+&=nL_u\mathbb P(\max_jA_j=0)\\
+&=nL_u\left(1-\frac1n\right)^n
+\ge\frac{nL_u}{4},
+\end{align*}
+where $(1-1/n)^n\ge(1-1/2)^2=1/4$ for $n\ge2$.
+Averaging over the finite family of spike realizations fixes a deterministic
+instance with at least this expected regret for the given randomized
+controller.
+\end{proof}
+
+In this construction, $H=2$ and $T=3n$. With $L_u>0$ fixed, the allowed
+state marginals grow as large as $nL_u=(T/3)L_u$, while expected regret is
+at least $L_uT/12$. Thus a bound depending only on $T$, $H$, and $L_u$
+cannot be sublinear in $T$ uniformly over all allowed magnitudes of the
+nonnegative state marginals.
+
+\subsection{Minimax bounds and unresolved deadline dependence}
+For each controller, consider its largest expected regret over admissible
+arrival and cost sequences fixed before the run begins. The expectation
+is over the controller's internal randomness. Taking the infimum of
+these worst-case values over controllers that use only revealed
+information and meet every arrival's deadline defines
+$\mathfrak R_{T,H}(L_x,L_u)$. The admissible costs satisfy the joint-cost
+assumptions with bounds $L_x$ and $L_u$.
+For $H\ge3$, $T\ge4$, the established results imply
+\begin{equation}\label{ch6:eq:minimax-sandwich}
+ \begin{split}
+ \max\left\{\frac{L_u}{2\sqrt3}\sqrt{T-1},\,
+ \frac{L_x}{256\sqrt3}H_0^{3/2}\sqrt T\right\}
+ &\le\mathfrak R_{T,H}(L_x,L_u),\\
+ \mathfrak R_{T,H}(L_x,L_u)
+ &\le\frac{2L_u+(H_0-1)L_x}{2}
+ \sqrt{T-1}\,\Lambda_{H_0}.
+ \end{split}
+\end{equation}
+The two subclasses give separate lower bounds, so their maximum bounds
+the minimax regret from below.
+In particular,
+\begin{equation}\label{ch6:eq:state-minimax}
+ \mathfrak R_{T,H}(L_x,0)
+ =\Theta(L_xH_0^{3/2}\sqrt T)
+ \quad(H\ge3,\ T\ge4).
+\end{equation}
+For fixed $L_x>0$ and bounded ratio $L_u/L_x$, the same dependence on
+$H_0,T$ follows for the general class, with constants allowed to depend
+on that ratio. These bounds do not establish matching dependence on
+$L_x$ and $L_u$ when they vary independently.
+
+For consumption-only costs, the separate conclusion is
+\begin{equation}\label{ch6:eq:action-gap}
+ \frac{L_u}{2\sqrt3}\sqrt{T-1}
+ \le\mathfrak R_{T,H}(0,L_u)
+ \le2(1+\sqrt2)L_u\sqrt{H_0(T-1)}
+ \qquad(H\ge2,\ T\ge2).
+\end{equation}
+When costs depend only on consumption and the deadline is fixed, the
+bounds establish the optimal $\sqrt T$ growth. Their dependence on the
+deadline remains unresolved: the upper bound increases with
+$\sqrt{H_0}$, while the lower bound has no deadline factor. The state
+lower bound uses costs that depend on storage, so it cannot answer this
+question for consumption-only costs. The sharp regret rate under the
+additional nonnegative storage-marginal assumptions in
+\eqref{ch6:eq:positive} also remains open.
+
+\section{Future Research Directions}
+\label{ch6:sec:next}
+The main open question is the action contribution in
+\eqref{ch6:eq:action-gap}. The current controller waits for an entire
+interval before updating one interleaved copy, although a single observed
+pair $(\zeta_t^x,\zeta_t^u)$ informs several active arrivals and intervals.
+
+\begin{Thm:Remark}[Progressively revealed split feedback]
+For a fixed $(s,I)$ with $I=[a,b]$, let $\pi^{\mathrm{L}}_i,\pi^{\mathrm{R}}_i$ be the final
+conditional leaf fractions in its two children, extended by zero outside
+the corresponding child, and define
+\begin{equation}\label{ch6:eq:partial-coefficients}
+ \delta_i=\pi^{\mathrm{L}}_i-\pi^{\mathrm{R}}_i,\qquad
+ D_k=\sum_{i=k}^b\delta_i=-\sum_{i=a}^{k-1}\delta_i.
+\end{equation}
+The two expressions for $D_k$ agree because both conditional distributions
+have unit mass and hence $\sum_i\delta_i=0$.
+Expanding \eqref{ch6:eq:g} gives the exact identity
+\begin{equation}\label{ch6:eq:partial}
+ \boxed{g_{s,I}=w_s\left[
+ \sum_{i=a}^b\delta_i\zeta_{s+i}^u
+ +\sum_{k=a+1}^bD_k\zeta_{s+k}^x\right].}
+\end{equation}
+Each conditional leaf fraction is fixed before its service, and $D_k$ can
+be computed from earlier conditional services through
+\eqref{ch6:eq:partial-coefficients}. Hence the summands are revealed
+progressively even though the full $g_{s,I}$ is unavailable at the split.
+\end{Thm:Remark}
+
+Using partial feedback requires a new regret analysis. Each revealed
+piece of feedback belongs to a split that has already been chosen. An
+early update changes the learner's reference value while some feedback
+for that split is still missing. The analysis must therefore account for
+the full cost comparison associated with the original split and count
+each feedback contribution exactly once. Such an analysis might reduce
+the cost of maintaining separate learners for delayed feedback.
+
+Another direction is to prove a stronger lower bound for consumption-only
+costs. A lower bound that grows with the deadline could show whether the
+current $\sqrt{H_0}$ factor is necessary.
+
+\section{Conclusion}
+\label{ch6:sec:conclusion}
+
+This paper studies online decisions under resource constraints and
+individual service deadlines. The controller uses a tree to
+divide each arrival among age intervals as they begin, enforcing complete
+consumption by its deadline. Local mirror-descent updates
+adapt to adversarial jointly convex costs. Uniformly positive state marginals
+can justify a shorter deadline, and known
+state costs can be included directly in a causal prediction step.
+
+The matching lower bound for linear storage costs with coefficients of either sign identifies an unavoidable cost of
+long resource lifetimes. The deadline dependence for consumption-only costs remains
+unresolved, with partially revealed and overlapping feedback providing a
+direction for further work.
+
+\appendix
+\section{Supporting Lemmas}
+
+\subsection{Scalar quadratic and entropy geometry}
+\label{app:geometry}
+
+For a differentiable convex function $\psi$, its Bregman divergence is
+\[
+ D_\psi(p,z)=\psi(p)-\psi(z)-\psi'(z)(p-z).
+\]
+The quadratic regularizer $\psi_Q(p)=p^2/2$ gives
+$D_{\psi_Q}(p,z)=(p-z)^2/2$ and
+$\sup_{p\in[0,1]}D_{\psi_Q}(p,1/2)=1/8$.
+For binary entropy, let
+\[
+ \psi_E(p)=p\log p+(1-p)\log(1-p),\qquad p\in[0,1],
+\]
+with the continuous convention at the endpoints. Its divergence is
+$\operatorname{kl}(p\|z)$ for $z\in(0,1)$.
+Since
+\[
+ \psi_E''(p)=\frac1p+\frac1{1-p}
+ =\frac1{p(1-p)}\ge4\qquad(0<p<1),
+\]
+integration and continuity at the endpoints give
+\[
+ D_{\psi_E}(p,z)\ge2(p-z)^2,\qquad
+ D_{\psi_E}(p,1/2)=\log2+\psi_E(p)\le\log2.
+\]
+These are the binary specializations of standard entropy geometry
+bounds~\cite{BECK2003167}.
+
+For the reference update, quadratic minimization gives
+$z^+=[z-\eta g]_0^1$. Under entropy, first-order optimality gives
+\[
+ \eta g+\log\frac{z^+}{1-z^+}-\log\frac z{1-z}=0,
+\]
+hence
+\[
+ z^+=\frac{z e^{-\eta g}}{1-z+z e^{-\eta g}}.
+\]
+Strict convexity gives uniqueness. For finite $g$ and $z\in(0,1)$ this
+update is interior. The prediction objective with a finite continuous
+convex differentiable predictor also has an interior entropy minimizer:
+the entropy derivative tends to $-\infty$ and $+\infty$ at the two
+endpoints, respectively. Quadratic minimizers may lie on the boundary.
+
+\subsection{Prediction and correction from a common reference}
+\label{app:prediction}
+
+The following scalar inequality is the prediction--correction comparison
+used in the analysis; compare~\cite[Lemma~3]{RakhlinSridharan2013}.
+
+\begin{Thm:Lemma}[Prediction and correction from a common reference]
+\label{app:lem:optimistic}
+Let $\psi$ be either regularizer in Appendix~\ref{app:geometry}, and let
+$\sigma>0$ satisfy
+$D_\psi(v,w)\ge \sigma(v-w)^2/2$ on its domain.
+Let $\eta>0$, let $F:[0,1]\to\Real$ be convex and differentiable with
+finite derivative, and let $g\in\Real$. Define
+\[
+ p=\argmin_{v\in[0,1]}\{\eta F(v)+D_\psi(v,z)\},\qquad
+ z^+=\argmin_{v\in[0,1]}\{\eta gv+D_\psi(v,z)\}.
+\]
+For entropy assume $z\in(0,1)$; for the quadratic case allow $z\in[0,1]$.
+Writing $\widehat g=F'(p)$, every $u\in[0,1]$ satisfies
+\[
+ g(p-u)\le
+ \frac{D_\psi(u,z)-D_\psi(u,z^+)}{\eta}
+ +\frac{\eta}{2\sigma}(g-\widehat g)^2
+ -\frac{D_\psi(p,z)}{\eta}.
+\]
+\end{Thm:Lemma}
+\begin{proof}
+Direct expansion yields the three-point identity
+\[
+ (\psi'(a)-\psi'(b))(c-a)
+ =D_\psi(c,b)-D_\psi(c,a)-D_\psi(a,b).
+\]
+The correction optimality condition, tested at $u$, therefore gives
+\[
+ \eta g(z^+-u)
+ \le D_\psi(u,z)-D_\psi(u,z^+)-D_\psi(z^+,z).
+\]
+The prediction optimality condition, tested at $z^+$, similarly gives
+\[
+ \eta\widehat g(p-z^+)
+ \le D_\psi(z^+,z)-D_\psi(z^+,p)-D_\psi(p,z).
+\]
+Both conditions allow quadratic boundary minimizers; the entropy
+minimizers are interior by Appendix~\ref{app:geometry}.
+Adding the inequalities and the remaining term
+$\eta(g-\widehat g)(p-z^+)$ yields
+\begin{align*}
+ \eta g(p-u)
+ &\le D_\psi(u,z)-D_\psi(u,z^+)-D_\psi(p,z)\\
+ &\quad-D_\psi(z^+,p)+\eta(g-\widehat g)(p-z^+)\\
+ &\le D_\psi(u,z)-D_\psi(u,z^+)-D_\psi(p,z)
+       +\frac{\eta^2}{2\sigma}(g-\widehat g)^2.
+\end{align*}
+The last step uses strong convexity and
+$\eta ab\le \sigma b^2/2+\eta^2a^2/(2\sigma)$.
+Division by $\eta$ proves the claim.
+\end{proof}
+
+\subsection{Independent signs and deterministic instances}
+\label{app:signs}
+
+\begin{Thm:Lemma}[Expected absolute value of a weighted sum of independent signs; cf.~{\cite{haagerup1981khintchine}}]
+\label{lem:intro:signs}\label{ch6:lem:signs}
+For independent random signs $\xi_1,\ldots,\xi_n$, each equally likely to be
+$-1$ or $+1$, and deterministic real coefficients $a_i$, let
+$S=\sum_i a_i\xi_i$. Then
+\begin{equation}\label{eq:intro:sign-moment}
+ \E[|S|]\ge\frac1{\sqrt3}\left(\sum_i a_i^2\right)^{1/2}.
+\end{equation}
+In particular, when all $a_i=1$,
+\begin{equation}\label{ch6:eq:signs}
+ \E[|S|]\ge\sqrt{n/3}.
+\end{equation}
+\end{Thm:Lemma}
+\begin{proof}
+Put $v=\sum_i a_i^2$.  Independence and the fact that products containing an
+odd power of any sign have zero expectation give
+\begin{align*}
+ \E[S^2]&=\sum_i a_i^2=v,\\
+ \E[S^4]
+ &=\sum_i a_i^4+6\sum_{i<j}a_i^2a_j^2\\
+ &=3\left(\sum_i a_i^2\right)^2-2\sum_i a_i^4
+ \le3v^2.
+\end{align*}
+H\"older's inequality with exponents $3/2$ and $3$ gives
+\begin{align*}
+ v=\E[|S|^2]
+ &=\E\bigl[|S|^{2/3}|S|^{4/3}\bigr]\\
+ &\le(\E[|S|])^{2/3}(\E[|S|^4])^{1/3}
+ \le(\E[|S|])^{2/3}(3v^2)^{1/3}.
+\end{align*}
+For $v>0$, cubing and cancelling $v^2$ yields
+$\E[|S|]\ge\sqrt{v/3}$; for $v=0$, both sides vanish.
+\end{proof}
+
+The classical Khintchine inequality gives the sharper bound
+\cite{haagerup1981khintchine}:
+\begin{equation}\label{eq:intro:khintchine}
+ \E\left[\left|\sum_i a_i\xi_i\right|\right]
+ \ge\frac1{\sqrt2}\left(\sum_i a_i^2\right)^{1/2}.
+\end{equation}
+To obtain a deterministic instance, first fix a controller, including the
+rule for its random choices. Then draw an input sequence from a finite
+collection, independently of those choices; each sequence specifies all
+inputs before the run begins. If regret averaged over both the sequence
+draw and the controller's random choices is at least $R$, then some
+sequence in the collection has expected regret at least $R$ when only
+the controller is randomized. This sequence can depend on which
+controller was fixed.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
