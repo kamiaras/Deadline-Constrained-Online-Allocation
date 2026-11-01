@@ -1,6 +1,6 @@
 # Deadline-Constrained Online Allocation
 
-Private theoretical manuscript by Kamiar Asgari on online allocation with
+Public research draft by Kamiar Asgari on online allocation with
 lossless scalar storage and a hard service deadline for every arrival.
 The manuscript compares the controller with fixed distributions over service
 ages, each evaluated on its own storage trajectory.
@@ -42,7 +42,7 @@ citations or references. The final log retained one underfull line warning and
 the expected package warning about disabled shell escape. The tracked PDF was
 not replaced, and no mathematical or visual review is claimed by that check.
 
-## Before publication
+## Research status
 
 The literature note is a dated comparison, not proof of priority or mathematical
 correctness. Author review of the assumptions, proofs, attribution, and AI
@@ -51,5 +51,17 @@ allows signed state marginals; it does not establish the same result for ordinar
 nonnegative holding costs. The action-only bounds retain a deadline-dependent
 gap, so the draft should not be described as fully minimax optimal.
 
-Choose the final manuscript version, venue, license, and publication timing
-separately. This repository remains private.
+This draft is public. Journal submission, license terms, and future manuscript
+versions are separate decisions.
+
+## Website note and PDF sync
+
+Read the [website note](https://kamiaras.github.io/writing/deadline-constrained-online-allocation/)
+for an embedded PDF, download link, and a short introduction.
+
+After changing the manuscript source, rebuild and commit `main.pdf` to `main`.
+The `Sync manuscript PDF to personal website` workflow copies that PDF to the
+website automatically. It publishes only the PDF; it does not copy source files,
+the literature note, or build outputs. The website's existing Pages workflow
+then publishes the updated file. The sync skips unchanged PDFs and can also be
+run manually from Actions. LaTeX compilation remains a separate step.

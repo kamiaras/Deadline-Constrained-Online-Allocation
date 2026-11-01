@@ -1,0 +1,41 @@
+name: Sync manuscript PDF to personal website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-deadline-note-pdf
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'kamiaras/Deadline-Constrained-Online-Allocation' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out current manuscript
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          path: source
+          persist-credentials: false
+      - name: Check out website
+        uses: actions/checkout@v6
+        with:
+          repository: kamiaras/kamiaras.github.io
+          ref: master
+          path: website
+          ssh-key: ${{ secrets.WEBSITE_DEADLINE_SYNC_KEY }}
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install PDF reader
+        run: python -m pip install --disable-pip-version-check pypdf==6.10.0
+      - name: Publish the tracked PDF
+        run: python source/.github/scripts/sync_website_pdf.py --source source --website website
